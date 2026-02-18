@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jquants-metrics</title>
+  <style>
+    /* ── CSS Design Tokens ── */
+    :root {
+      --background:  #ffffff;
+      --foreground:  #09090b;
+      --card:        #ffffff;
+      --card-fg:     #09090b;
+      --border:      #e4e4e7;
+      --input:       #e4e4e7;
+      --primary:     #18181b;
+      --primary-fg:  #fafafa;
+      --muted:       #f4f4f5;
+      --muted-fg:    #71717a;
+      --ring:        #18181b;
+      --radius:      0.5rem;
+      --up:          #16a34a;
+      --down:        #dc2626;
+    }
+    [data-theme="dark"] {
+      --background:  #09090b;
+      --foreground:  #fafafa;
+      --card:        #18181b;
+      --card-fg:     #fafafa;
+      --border:      #27272a;
+      --input:       #27272a;
+      --primary:     #fafafa;
+      --primary-fg:  #18181b;
+      --muted:       #27272a;
+      --muted-fg:    #a1a1aa;
+      --ring:        #d4d4d8;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--background);
+      color: var(--foreground);
+      min-height: 100vh;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Header ── */
+    .header {
+      border-bottom: 1px solid var(--border);
+      background: var(--background);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .header-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.03em; }
+    .logo span { color: var(--muted-fg); font-weight: 400; }
+    .nav { display: flex; gap: 4px; }
+    .nav-link {
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted-fg);
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+    .nav-link:hover { background: var(--muted); color: var(--foreground); }
+    .nav-link.active { background: var(--muted); color: var(--foreground); }
+
+    /* ── Main ── */
+    .main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Search Block ── */
+    .search-block { margin-bottom: 48px; }
+    .search-label {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+    .search-row {
+      display: flex;
+      gap: 8px;
+      position: relative;
+    }
+    .input {
+      flex: 1;
+      height: 44px;
+      padding: 0 14px;
+      border: 1px solid var(--input);
+      border-radius: var(--radius);
+      background: var(--background);
+      color: var(--foreground);
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .input:focus {
+      border-color: var(--ring);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+    }
+    .input::placeholder { color: var(--muted-fg); }
+    .btn {
+      height: 44px;
+      padding: 0 18px;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--primary); color: var(--primary-fg); }
+    .btn-primary:hover { opacity: 0.85; }
+
+    /* ── Autocomplete Dropdown ── */
+    .dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 60px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+      z-index: 20;
+      overflow: hidden;
+    }
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .dropdown-item:hover, .dropdown-item.selected { background: var(--muted); }
+    .dropdown-item + .dropdown-item { border-top: 1px solid var(--border); }
+    .di-left { display: flex; align-items: center; gap: 10px; }
+    .di-code {
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted-fg);
+      width: 36px;
+    }
+    .di-name { font-size: 13px; font-weight: 500; }
+    .di-sector { font-size: 11px; color: var(--muted-fg); }
+    .di-right { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* ── History ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .section-title { font-size: 13px; font-weight: 600; color: var(--muted-fg); text-transform: uppercase; letter-spacing: 0.05em; }
+    .clear-btn {
+      font-size: 12px;
+      color: var(--muted-fg);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .clear-btn:hover { background: var(--muted); color: var(--foreground); }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 40px;
+    }
+    .history-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.1s;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--foreground);
+    }
+    .history-item:hover { background: var(--muted); }
+    .hi-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: ui-monospace, monospace;
+      color: var(--muted-fg);
+      flex-shrink: 0;
+    }
+    .hi-body { flex: 1; min-width: 0; }
+    .hi-name { font-size: 13px; font-weight: 500; }
+    .hi-meta { font-size: 11px; color: var(--muted-fg); margin-top: 1px; }
+    .hi-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .hi-price { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .hi-change { font-size: 11px; font-weight: 500; }
+    .up   { color: var(--up); }
+    .down { color: var(--down); }
+    .hi-time { font-size: 11px; color: var(--muted-fg); margin-left: auto; flex-shrink: 0; }
+    .remove-btn {
+      background: none;
+      border: none;
+      color: var(--muted-fg);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      opacity: 0;
+      font-size: 14px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .history-item:hover .remove-btn { opacity: 1; }
+    .remove-btn:hover { background: var(--border); color: var(--foreground); }
+
+    /* ── Favorites ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-title { font-size: 13px; font-weight: 600; }
+
+    .fav-table { width: 100%; border-collapse: collapse; }
+    .fav-table th {
+      padding: 8px 14px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted-fg);
+    }
+    .fav-table th.r, .fav-table td.r { text-align: right; }
+    .fav-table td {
+      padding: 11px 14px;
+      font-size: 13px;
+      border-top: 1px solid var(--border);
+    }
+    .fav-table tbody tr { cursor: pointer; transition: background 0.1s; }
+    .fav-table tbody tr:hover { background: var(--muted); }
+
+    .code { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted-fg); font-weight: 600; }
+    .name { font-weight: 500; }
+    .star-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #facc15;
+      font-size: 14px;
+      padding: 2px;
+      line-height: 1;
+    }
+    .empty-state {
+      padding: 32px;
+      text-align: center;
+      color: var(--muted-fg);
+      font-size: 13px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--muted);
+      color: var(--muted-fg);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">jquants<span>-metrics</span></div>
+    <nav class="nav">
+      <button class="nav-link active">ホーム</button>
+      <a href="screen.html" class="nav-link">スクリーニング</a>
+      <button class="nav-link" onclick="toggleTheme()">テーマ</button>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- ── Search ── -->
+  <section class="search-block">
+    <h1 class="search-label">銘柄を検索</h1>
+    <div class="search-row" id="searchWrap">
+      <input
+        class="input"
+        id="searchInput"
+        type="text"
+        placeholder="銘柄コード（7203）または会社名"
+        oninput="showDropdown(this.value)"
+        onfocus="showDropdown(this.value)"
+        onblur="setTimeout(hideDropdown, 150)"
+        autocomplete="off"
+      />
+      <button class="btn btn-primary" onclick="doSearch()">検索</button>
+
+      <!-- Autocomplete dropdown (入力中に表示) -->
+      <div class="dropdown" id="dropdown" style="display:none">
+        <div class="dropdown-item selected" onclick="goto('stock.html')">
+          <div class="di-left">
+            <span class="di-code">7203</span>
+            <div>
+              <div class="di-name">トヨタ自動車</div>
+              <div class="di-sector">輸送用機器 · プライム</div>
+            </div>
+          </div>
+          <div class="di-right">¥3,450</div>
+        </div>
+        <div class="dropdown-item" onclick="goto('stock.html')">
+          <div class="di-left">
+            <span class="di-code">7267</span>
+            <div>
+              <div class="di-name">ホンダ技研工業</div>
+              <div class="di-sector">輸送用機器 · プライム</div>
+            </div>
+          </div>
+          <div class="di-right">¥1,682</div>
+        </div>
+        <div class="dropdown-item" onclick="goto('stock.html')">
+          <div class="di-left">
+            <span class="di-code">7270</span>
+            <div>
+              <div class="di-name">SUBARU</div>
+              <div class="di-sector">輸送用機器 · プライム</div>
+            </div>
+          </div>
+          <div class="di-right">¥2,891</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Search History ── -->
+  <section>
+    <div class="section-header">
+      <span class="section-title">検索履歴</span>
+      <button class="clear-btn" onclick="clearHistory()">すべて削除</button>
+    </div>
+    <div class="history-list">
+
+      <a href="stock.html" class="history-item">
+        <div class="hi-icon">7203</div>
+        <div class="hi-body">
+          <div class="hi-name">トヨタ自動車</div>
+          <div class="hi-meta">輸送用機器 · プライム</div>
+        </div>
+        <div class="hi-right">
+          <span class="hi-price">¥3,450</span>
+          <span class="hi-change up">▲ +1.23%</span>
+        </div>
+        <span class="hi-time">2分前</span>
+        <button class="remove-btn" onclick="event.preventDefault(); event.stopPropagation();" title="履歴から削除">✕</button>
+      </a>
+
+      <a href="stock.html" class="history-item">
+        <div class="hi-icon">6758</div>
+        <div class="hi-body">
+          <div class="hi-name">ソニーグループ</div>
+          <div class="hi-meta">電気機器 · プライム</div>
+        </div>
+        <div class="hi-right">
+          <span class="hi-price">¥12,845</span>
+          <span class="hi-change down">▼ -0.92%</span>
+        </div>
+        <span class="hi-time">昨日</span>
+        <button class="remove-btn" onclick="event.preventDefault(); event.stopPropagation();" title="履歴から削除">✕</button>
+      </a>
+
+      <a href="stock.html" class="history-item">
+        <div class="hi-icon">4063</div>
+        <div class="hi-body">
+          <div class="hi-name">信越化学工業</div>
+          <div class="hi-meta">化学 · プライム</div>
+        </div>
+        <div class="hi-right">
+          <span class="hi-price">¥5,780</span>
+          <span class="hi-change down">▼ -0.60%</span>
+        </div>
+        <span class="hi-time">昨日</span>
+        <button class="remove-btn" onclick="event.preventDefault(); event.stopPropagation();" title="履歴から削除">✕</button>
+      </a>
+
+      <a href="stock.html" class="history-item">
+        <div class="hi-icon">9984</div>
+        <div class="hi-body">
+          <div class="hi-name">ソフトバンクグループ</div>
+          <div class="hi-meta">情報・通信 · プライム</div>
+        </div>
+        <div class="hi-right">
+          <span class="hi-price">¥8,210</span>
+          <span class="hi-change up">▲ +0.80%</span>
+        </div>
+        <span class="hi-time">3日前</span>
+        <button class="remove-btn" onclick="event.preventDefault(); event.stopPropagation();" title="履歴から削除">✕</button>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- ── Favorites / Watchlist ── -->
+  <section>
+    <div class="section-header">
+      <span class="section-title">お気に入り</span>
+      <span class="badge">2銘柄</span>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">ウォッチリスト</span>
+        <span style="font-size:11px;color:var(--muted-fg)">株価は最終同期時点</span>
+      </div>
+      <table class="fav-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>コード</th>
+            <th>銘柄名</th>
+            <th class="r">株価</th>
+            <th class="r">前日比</th>
+            <th class="r">PER</th>
+            <th class="r">PBR</th>
+            <th class="r">ROE</th>
+            <th class="r">配当利回り</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr onclick="location.href='stock.html'">
+            <td><button class="star-btn" onclick="event.stopPropagation()" title="お気に入り解除">★</button></td>
+            <td><span class="code">7203</span></td>
+            <td><span class="name">トヨタ自動車</span></td>
+            <td class="r" style="font-weight:600;font-variant-numeric:tabular-nums">3,450</td>
+            <td class="r"><span class="up">+1.23%</span></td>
+            <td class="r">9.2x</td>
+            <td class="r">1.11x</td>
+            <td class="r">12.3%</td>
+            <td class="r">3.1%</td>
+          </tr>
+          <tr onclick="location.href='stock.html'">
+            <td><button class="star-btn" onclick="event.stopPropagation()" title="お気に入り解除">★</button></td>
+            <td><span class="code">4063</span></td>
+            <td><span class="name">信越化学工業</span></td>
+            <td class="r" style="font-weight:600;font-variant-numeric:tabular-nums">5,780</td>
+            <td class="r"><span class="down">-0.60%</span></td>
+            <td class="r">21.3x</td>
+            <td class="r">4.20x</td>
+            <td class="r">19.8%</td>
+            <td class="r">1.3%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  /* ── Theme ── */
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  }
+
+  /* ── Search dropdown (モック動作) ── */
+  function showDropdown(val) {
+    document.getElementById('dropdown').style.display = val.trim() ? 'block' : 'none';
+  }
+  function hideDropdown() {
+    document.getElementById('dropdown').style.display = 'none';
+  }
+  function doSearch() {
+    const v = document.getElementById('searchInput').value.trim();
+    if (v) location.href = 'stock.html';
+  }
+  function goto(url) { location.href = url; }
+
+  /* ── Clear history (モック動作) ── */
+  function clearHistory() {
+    document.querySelector('.history-list').innerHTML =
+      '<div class="empty-state">検索履歴はありません</div>';
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "api": {
+    "base_url": "https://api.jquants.com/v2",
+    "auth_header": "x-api-key"
+  },
+  "endpoints": {
+    "equities_master": {
+      "path": "/equities/master",
+      "fields": {
+        "銘柄コード": ["Code"],
+        "基準日": ["Date"],
+        "銘柄名": ["CoName"],
+        "市場区分": ["Mkt"],
+        "17業種コード": ["S17"],
+        "33業種コード": ["S33"],
+        "規模区分": ["ScaleCat"],
+        "信用区分": ["Mrgn"]
+      }
+    },
+    "equities_bars_daily": {
+      "path": "/equities/bars/daily",
+      "fields": {
+        "取引日": ["Date"],
+        "始値": ["O"],
+        "高値": ["H"],
+        "安値": ["L"],
+        "終値": ["C"],
+        "出来高": ["Vo"],
+        "売買代金": ["Va"],
+        "調整係数": ["AdjFactor"],
+        "調整後始値": ["AdjO"],
+        "調整後高値": ["AdjH"],
+        "調整後安値": ["AdjL"],
+        "調整後終値": ["AdjC"],
+        "調整後出来高": ["AdjVo"]
+      }
+    },
+    "fins_summary": {
+      "path": "/fins/summary",
+      "fields": {
+        "開示日": ["DiscDate"],
+        "売上高": ["Sales"],
+        "営業利益": ["OP"],
+        "経常利益": ["OdP"],
+        "当期純利益": ["NP"],
+        "EPS": ["EPS"],
+        "総資産": ["TA"],
+        "自己資本": ["Eq"],
+        "親会社所有者帰属持分": ["EqAR"],
+        "現金及び現金同等物": ["CashEq"],
+        "営業CF": ["CFO"],
+        "投資CF": ["CFI"],
+        "財務CF": ["CFF"],
+        "発行済株式数(期末)": ["ShOutFY"],
+        "自己株式数(期末)": ["TrShFY"],
+        "期中平均株式数": ["AvgSh"]
+      }
+    },
+    "fins_details": {
+      "path": "/fins/details",
+      "root_object_candidates": ["FinancialStatement", "financial_statement", "statement"],
+      "meta_fields": {
+        "開示日": ["DisclosedDate", "DiscDate"],
+        "会計基準": ["AccountingStandard"],
+        "連結区分": ["ConsolidatedFlag", "Consolidated"],
+        "対象期間区分": ["TypeOfDocument", "PeriodType"],
+        "単位スケール": ["Unit", "Scale", "AmountUnit"]
+      },
+      "statement_map": {
+        "発行済株式数(期末)": {
+          "mode": "first_match",
+          "keys": [
+            "NumberOfIssuedAndOutstandingSharesAtTheEndOfFiscalYearIncludingTreasuryStock",
+            "SharesOutstanding",
+            "ShOutFY"
+          ]
+        },
+        "現金及び現金同等物": {
+          "mode": "first_match",
+          "keys": [
+            "Cash and cash equivalents (IFRS)",
+            "Cash and cash equivalents",
+            "CashAndCashEquivalents"
+          ]
+        },
+        "自己資本": {
+          "mode": "first_match",
+          "keys": [
+            "Equity (IFRS)",
+            "Equity attributable to owners of parent (IFRS)",
+            "Equity",
+            "Total equity"
+          ]
+        },
+        "有利子負債_流動": {
+          "mode": "first_match",
+          "keys": [
+            "Bonds and borrowings - CL (IFRS)",
+            "Borrowings - CL (IFRS)",
+            "Short-term borrowings"
+          ]
+        },
+        "有利子負債_非流動": {
+          "mode": "first_match",
+          "keys": [
+            "Bonds and borrowings - NCL (IFRS)",
+            "Borrowings - NCL (IFRS)",
+            "Long-term borrowings"
+          ]
+        },
+        "営業利益": {
+          "mode": "first_match",
+          "keys": [
+            "Operating profit (loss) (IFRS)",
+            "Operating profit",
+            "OP"
+          ]
+        },
+        "減価償却費・償却費": {
+          "mode": "first_match",
+          "keys": [
+            "Depreciation and amortization - OpeCF (IFRS)",
+            "Depreciation and amortization",
+            "DepreciationAndAmortization"
+          ]
+        },
+        "税引前利益": {
+          "mode": "first_match",
+          "keys": [
+            "Profit (loss) before tax from continuing operations (IFRS)",
+            "Profit before tax",
+            "PBT"
+          ]
+        },
+        "法人税等": {
+          "mode": "first_match",
+          "keys": [
+            "Income tax expense (IFRS)",
+            "Income taxes",
+            "Tax expense"
+          ]
+        },
+        "非支配持分": {
+          "mode": "first_match",
+          "keys": [
+            "Non-controlling interests (IFRS)",
+            "Non-controlling interests"
+          ],
+          "optional": true
+        }
+      }
+    }
+  },
+  "metric_inputs": {
+    "EV": {
+      "price_close": { "endpoint": "equities_bars_daily", "field": "終値", "prefer": ["AdjC", "C"] },
+      "shares_outstanding": { "endpoint": "fins_summary", "field": "発行済株式数(期末)", "fallback": ["fins_details:発行済株式数(期末)"] },
+      "cash_equivalents": { "endpoint": "fins_summary", "field": "現金及び現金同等物", "fallback": ["fins_details:現金及び現金同等物"] },
+      "interest_bearing_debt": { "endpoint": "fins_details", "fields": ["有利子負債_流動", "有利子負債_非流動"] },
+      "optional_additions": ["fins_details:非支配持分"]
+    },
+    "EBITDA": {
+      "operating_profit": { "endpoint": "fins_summary", "field": "営業利益", "fallback": ["fins_details:営業利益"] },
+      "depreciation_amortization": { "endpoint": "fins_details", "field": "減価償却費・償却費" }
+    },
+    "ROIC": {
+      "operating_profit": { "endpoint": "fins_summary", "field": "営業利益", "fallback": ["fins_details:営業利益"] },
+      "pretax_profit": { "endpoint": "fins_details", "field": "税引前利益" },
+      "income_taxes": { "endpoint": "fins_details", "field": "法人税等" },
+      "equity": { "endpoint": "fins_summary", "field": "自己資本", "fallback": ["fins_details:自己資本"] },
+      "cash_equivalents": { "endpoint": "fins_summary", "field": "現金及び現金同等物", "fallback": ["fins_details:現金及び現金同等物"] },
+      "interest_bearing_debt": { "endpoint": "fins_details", "fields": ["有利子負債_流動", "有利子負債_非流動"] }
+    }
+  }
+}
