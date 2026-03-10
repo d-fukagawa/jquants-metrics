@@ -1,0 +1,29 @@
+{
+  "name": "jquants-metrics",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "wrangler pages dev",
+    "deploy": "$npm_execpath run build && wrangler pages deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "drizzle-orm": "^0.40.1",
+    "hono": "^4.12.0"
+  },
+  "devDependencies": {
+    "@hono/vite-build": "^1.2.0",
+    "@hono/vite-dev-server": "^0.18.2",
+    "drizzle-kit": "^0.30.4",
+    "vite": "^6.3.5",
+    "vitest": "^4.0.18",
+    "wrangler": "^4.4.0"
+  }
+}

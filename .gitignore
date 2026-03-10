@@ -1,0 +1,24 @@
+# prod
+dist/
+
+# dev
+.wrangler
+
+# deps
+node_modules/
+
+# env
+.env
+.env.production
+.dev.vars
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# misc
+.DS_Store

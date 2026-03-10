@@ -1,78 +1,151 @@
-# jquants-metrics — 進捗 & 次のアクション
+# jquants-metrics TODO
 
-最終更新: 2025-02-18
-
----
-
-## 完了済み
-
-### Step 0: ドキュメント整備
-- [x] `doc/plan.md` 作成（技術スタック・DB スキーマ・実装ステップ・スクリーニング戦略）
-- [x] `README.md` 更新（プロジェクト概要・セットアップ手順）
-
-### Step 0.5: 事前検証 — UI モック
-- [x] `doc/mock/index.html` — ホーム（銘柄検索 + 検索履歴 + お気に入り）
-- [x] `doc/mock/stock.html` — 銘柄分析（株価チャート＋出来高 / 日次データテーブル / PL・BS・CF / 財務指標）
-- [x] `doc/mock/screen.html` — スクリーニング（条件サイドバー + 結果テーブル）
-- [x] `doc/mock/config/key.md` の API フィールドをモックに反映
-- [x] スクリーニング戦略（割安 × クオリティ）を `doc/plan.md` に追記
+最終更新: 2026-02-21
 
 ---
 
-## 次のアクション
+## Phase 1 — 銘柄分析 MVP（完了）
 
-### Step 0.5（後半）: JQuants API 無料プランの検証 ← **次にやること**
+### Step 0: ドキュメント整備 ✅
+- [x] `doc/plan.md` 作成
+- [x] `README.md` 更新
 
-手元の API キーで下記エンドポイントを実際に叩き、取得可否・フィールド有無・データ範囲を確認する。
+### Step 0.5: 事前検証 ✅
+- [x] `doc/mock/index.html` — ホーム UI モック
+- [x] `doc/mock/stock.html` — 銘柄分析 UI モック
+- [x] `doc/mock/screen.html` — スクリーニング UI モック
+- [x] JQuants API 無料プラン検証（master / bars / fins/summary）
+- [x] `doc/mock/config/api-validation.md` に検証結果
 
-| 確認項目 | エンドポイント | 確認ポイント |
-|----------|--------------|-------------|
-| 銘柄マスタ | `GET /v2/equities/master` | `Mrgn`（信用区分）フィールドの有無 |
-| 日足株価 | `GET /v2/equities/bars/daily` | 取得可能な過去日数（無料プランの制限） |
-| 財務サマリー | `GET /v2/fins/summary` | `EPS`, `BPS`, `CashEq`, `CFO` の有無 |
-| 財務詳細 | `GET /v2/fins/details` | 有利子負債・D&A フィールドの取得可否（Phase 2 前提） |
+### Step 1: プロジェクトブートストラップ ✅
+- [x] cloudflare-pages テンプレート展開
+- [x] `npm install`（hono + neon + drizzle + vitest）
+- [x] `npm run dev` 起動確認
 
-> 検証方法: curl または Postman で `x-api-key: <your-key>` ヘッダーを付けてリクエスト。
-> 結果は `doc/mock/config/` 配下に `api-validation.md` としてメモする。
+### Step 2–3: 環境設定 / Neon DB セットアップ ✅
+
+### Step 4: Drizzle スキーマ & マイグレーション ✅
+- [x] `src/db/schema.ts`（stock_master / daily_prices / financial_summary）
+- [x] `src/db/client.ts` — `createDb(databaseUrl)`
+- [x] `npm run db:generate` & `db:migrate`
+
+### Step 5: JQuants クライアント ✅
+- [x] `src/jquants/client.ts` + `types.ts`（11 tests）
+
+### Step 6: 同期サービス ✅
+- [x] `src/services/syncService.ts`（BATCH_SIZE=500）
+- [x] `src/routes/sync.ts`（POST /api/sync・X-Sync-Secret 保護）
+- [x] 23 tests
+
+### Step 7: ホーム画面 ✅
+- [x] `src/renderer.tsx`, `src/services/stockService.ts`, `src/routes/home.tsx`
+- [x] `public/static/style.css` — デザイントークン・全 CSS
+- [x] 20 tests
+
+### Step 8: 銘柄分析ページ ✅
+- [x] `src/services/priceService.ts`, `financialService.ts`, `src/routes/stock.tsx`
+- [x] 44 tests
+
+### Step 9: SVG チャート ✅
+- [x] `src/components/PriceChart.tsx` — サーバーサイド SVG（価格ライン＋出来高バー）
+- [x] `src/components/MetricsCard.tsx` — PER/PBR/ROE/配当利回りカード
+- [x] `public/static/style.css` — チャート CSS 変数・クラス追記
+
+### Step 10: フリープランデータ保存 & 動作検証 ✅（デプロイ除く）
+
+- [x] `wrangler.jsonc` JSONC 構文エラー（カンマ欠落）修正
+- [x] `.dev.vars` の `SYNC_SECRET=local-dev` を設定
+- [x] **JQuants API v2 フィールド名の不一致を修正**（→ 下記「発見した不具合」参照）
+- [x] 銘柄マスタ 4,425 件を Neon に投入
+- [x] トヨタ（7203）株価 489 件・財務 8 件を Neon に投入
+- [x] ブラウザ画面検証（`/`・`/stock/7203`）完了
+- [x] `npm run build`（285.83 kB）確認
+- [x] `npm run preview`（wrangler pages dev）での本番相当確認
+- [ ] Cloudflare Pages デプロイ — **検討中**
+
+#### 発見した不具合（Step 10 実績データ投入時に判明）
+
+| 症状 | 原因 | 修正ファイル |
+|------|------|------------|
+| `master` sync で `Cannot read properties of undefined (reading 'map')` | API レスポンスのトップキーが `"equities_master"` ではなく **`"data"`** | `src/jquants/types.ts`, `client.ts`, `client.test.ts` |
+| `financials` sync で `null value in column "disc_no"` | API フィールド名が `DisclosureNumber`→**`DiscNo`**、`DisclosureDate`→**`DiscDate`**、`TotalAssets`→**`TA`** | `src/jquants/types.ts`, `syncService.ts`, `client.test.ts`, `syncService.test.ts` |
+
+**修正後: 8 test files / 98 tests / build 285.83 kB**
 
 ---
 
-### Step 1: プロジェクトブートストラップ
+## Step 10-E: Cloudflare Pages デプロイ（保留・検討中）
 
-```bash
-# リポジトリルートで実行
-npm create hono@latest . -- --template cloudflare-pages
-npm install @neondatabase/serverless drizzle-orm
-npm install -D drizzle-kit
-```
+デプロイ前に決定・確認が必要な事項:
 
-### Step 2: 環境設定
-
-- `.gitignore` に `.dev.vars`, `dist/`, `node_modules/` を追加
-- `.dev.vars` を作成し `DATABASE_URL` と `JQUANTS_API_KEY` を設定
-- `wrangler.toml` に `compatibility_flags = ["nodejs_compat"]` と cron トリガーを追加
-
-### Step 3: Neon DB セットアップ
-
-- [console.neon.tech](https://console.neon.tech) でプロジェクト作成
-- 接続文字列を `.dev.vars` に追記
-
-### Step 4: Drizzle スキーマ & マイグレーション
-
-- `src/db/schema.ts` に 3 テーブルを定義（`stock_master` / `daily_prices` / `financial_summary`）
-- `npm run db:generate && npm run db:migrate` で Neon に適用
-
-### Step 5〜10
-
-→ `doc/plan.md` の「フェーズ 1 実装ステップ」を参照
+- [ ] 本番用 `SYNC_SECRET` の値を決める（強いランダム文字列）
+- [ ] `npm run deploy` 実行（初回は Cloudflare アカウントとの紐付けが必要）
+- [ ] Cloudflare Pages ダッシュボードで環境変数を設定:
+  - `DATABASE_URL`（Neon 接続文字列）
+  - `JQUANTS_API_KEY`
+  - `SYNC_SECRET`（本番用）
+- [ ] 本番 URL で `/`・`/stock/7203` の動作確認
+- [ ] 本番 URL から `POST /api/sync` でデータ投入（本番シークレット使用）
 
 ---
 
-## 保留・検討中
+## Phase 2 — スクリーニング機能
 
-| 項目 | 状態 | メモ |
-|------|------|------|
-| `fins_details` の取得コスト | 未検証 | 銘柄数 × API 呼び出し数が多い。バッチ戦略を要検討 |
-| PSR のキャッシュ戦略 | 未定 | DB に保持（日次更新）か、クエリ時に計算か |
-| 無料プランの日足データ取得可能期間 | **要確認（Step 0.5）** | 制限次第でチャート期間の上限が変わる |
-| screen.html Phase 1 フィルター追加 | モック未反映 | PSR・黒字・CFO・自己資本比率フィルターを実装時に追加 |
+### Step 11: スクリーニングページ ✅
+
+- [x] `src/services/screenService.ts` — 動的フィルタークエリ
+  - 対象: PER / PBR / ROE / 配当利回り / 自己資本比率 / PSR / 黒字フラグ / CFO フラグ
+  - 時価総額 = 最新終値 × shOutFy
+  - PSR = 時価総額 ÷ Sales
+  - `daily_prices` LATERAL JOIN で各銘柄の最新終値を取得
+- [x] `src/routes/screen.tsx` — `GET /screen`（GET パラメータでフィルター）
+  - サイドバー: 各指標 min/max 入力 + チェックボックス
+  - 結果テーブル: コード・名称・株価・PER・PBR・ROE・EqAR・PSR・配当利回り
+- [x] `src/index.tsx` — `/screen` ルートをマウント
+- [x] `src/services/screenService.test.ts` + `src/routes/screen.test.tsx`
+
+### Step 12: 自動同期 Cron ハンドラー
+
+- [ ] `src/index.tsx` に `scheduled` ハンドラー追加
+  - 毎日 01:00 UTC: 全銘柄マスタ更新 → 株価・財務をバッチ更新
+  - レート制限（5 req/min）対応: 各銘柄間に `await sleep(200)`
+- [ ] Cloudflare Workers cron trigger 設定確認（`wrangler.jsonc`）
+
+---
+
+## Phase 3 — 高度財務指標（fins_details）
+
+### Step 13: fins_details 同期
+
+- [ ] `src/db/schema.ts` に `fins_details` テーブル追加
+  - 有利子負債（流動/非流動）・減価償却費・D&A
+- [ ] `src/jquants/client.ts` — `fetchFinsDetails` 追加
+- [ ] `src/services/syncService.ts` — `syncFinsDetails` 追加
+
+### Step 14: 高度指標計算 & 表示
+
+- [ ] ネットキャッシュ、EV、EBITDA、EV/EBITDA、ROIC の計算ロジック追加
+- [ ] スクリーニング条件に EV/EBITDA・ネットキャッシュ比率を追加
+- [ ] 銘柄分析ページに高度指標セクションを追加
+
+---
+
+## メモ
+
+### JQuants API v2 実フィールド名（実測値）
+
+| エンドポイント | レスポンスルートキー | 主な注意フィールド |
+|---|---|---|
+| `/v2/equities/master` | `"data"` | — |
+| `/v2/equities/bars/daily` | `"data"` | — |
+| `/v2/fins/summary` | `"data"` | `DiscNo`（旧 DisclosureNumber）、`DiscDate`（旧 DisclosureDate）、`TA`（旧 TotalAssets） |
+
+### その他
+
+- **JQuants 無料プラン**: 日足データ取得範囲 = 2023-11-29 〜 2025-11-29
+- **5桁↔4桁コード変換**: URL は 4 桁（"7203"）、DB・API は 5 桁（"72030"）→ `code4 + '0'`
+- **BPS フォールバック**: IFRS 中間決算は BPS が空 → `Eq / (ShOutFY - TrShFY)` で代替
+- **Drizzle upsert**: `onConflictDoUpdate` + `sql\`excluded.col\`` パターン
+- **`npm run dev`** = Vite + `@hono/vite-dev-server`（Miniflare ベース、`.dev.vars` を読む）
+- **`npm run preview`** = `wrangler pages dev`（ビルド後、より忠実な CF Workers 環境）
+- **`wrangler.jsonc`**: JSONC でもオブジェクトプロパティ間のカンマは必須
