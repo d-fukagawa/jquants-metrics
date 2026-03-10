@@ -61,7 +61,7 @@
 - [x] ブラウザ画面検証（`/`・`/stock/7203`）完了
 - [x] `npm run build`（285.83 kB）確認
 - [x] `npm run preview`（wrangler pages dev）での本番相当確認
-- [ ] Cloudflare Pages デプロイ — **検討中**
+- [x] Cloudflare Pages デプロイ — https://973155cb.jquants-metrics.pages.dev
 
 #### 発見した不具合（Step 10 実績データ投入時に判明）
 
