@@ -9,7 +9,10 @@
   // "vars": {
   //   "MY_VAR": "my-variable"
   // },
-  // Cron triggers: Pages では未サポート。将来 Workers Cron Trigger で設定する。
+  // Cron triggers: wrangler.jsonc での設定は Workers 専用（Pages 非対応）。
+  // Pages の場合はダッシュボードで設定する:
+  //   Cloudflare Dashboard > Pages > jquants-metrics > Settings > Functions > Cron Triggers
+  //   → "0 1 * * *"（毎日 01:00 UTC）を追加
   // "triggers": {
   //   "crons": ["0 1 * * *"]
   // }

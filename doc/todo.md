@@ -104,12 +104,18 @@
 - [x] `src/index.tsx` — `/screen` ルートをマウント
 - [x] `src/services/screenService.test.ts` + `src/routes/screen.test.tsx`
 
-### Step 12: 自動同期 Cron ハンドラー
+### Step 12: 自動同期 Cron ハンドラー ✅
 
-- [ ] `src/index.tsx` に `scheduled` ハンドラー追加
-  - 毎日 01:00 UTC: 全銘柄マスタ更新 → 株価・財務をバッチ更新
-  - レート制限（5 req/min）対応: 各銘柄間に `await sleep(200)`
-- [ ] Cloudflare Workers cron trigger 設定確認（`wrangler.jsonc`）
+> **前提**: JQuants API 有料プランが必要。
+> 無料プランのデータ範囲は 〜2025-11-29 で終了しており、2026-03-11 以降の最新データは有料プランでのみ取得可能。
+
+- [x] `src/services/syncService.ts` に `syncAllStocks(db, apiKey, from, to)` 追加
+  - 銘柄マスタ更新 → 全銘柄の株価・財務をループ同期
+  - レート制限（5 req/min）対応: 各 API 呼び出し後に `await sleep(200)`
+- [x] `src/index.tsx` に `scheduled` ハンドラー追加（直近7日間を同期）
+  - エクスポート形式を `export default { fetch, scheduled }` に変更
+- [x] Cloudflare Pages の Cron は `wrangler.jsonc` 非対応 → コメントで手順を明記
+  - ダッシュボード: Pages > Settings > Functions > Cron Triggers > `0 1 * * *`
 
 ---
 

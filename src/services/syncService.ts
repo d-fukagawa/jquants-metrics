@@ -5,6 +5,8 @@ import { fetchEquitiesMaster, fetchDailyPrices, fetchFinancialSummary } from '..
 
 const BATCH_SIZE = 500
 
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
 // 空文字 → null 変換
 function toNum(s: string | null | undefined): string | null {
   return s === null || s === undefined || s === '' ? null : s
@@ -172,4 +174,30 @@ export async function syncFinancialSummary(
     })
 
   return rows.length
+}
+
+// 全銘柄の株価・財務を一括同期（Cron ハンドラー用）
+// from/to: YYYY-MM-DD（例: 直近7日間）
+// レート制限（5 req/min）対応: 各 API 呼び出しの間に sleep(200)
+export async function syncAllStocks(
+  db: Db,
+  apiKey: string,
+  from: string,
+  to: string,
+): Promise<{ masterCount: number; priceCount: number; finCount: number }> {
+  const masterCount = await syncStockMaster(db, apiKey)
+
+  const stocks = await db.select({ code: stockMaster.code }).from(stockMaster)
+
+  let priceCount = 0
+  let finCount = 0
+
+  for (const { code } of stocks) {
+    priceCount += await syncDailyPrices(db, apiKey, code, from, to)
+    await sleep(200)
+    finCount += await syncFinancialSummary(db, apiKey, code)
+    await sleep(200)
+  }
+
+  return { masterCount, priceCount, finCount }
 }
