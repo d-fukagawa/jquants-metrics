@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { stockMaster, dailyPrices, financialSummary } from '../db/schema'
-import { fetchEquitiesMaster, fetchDailyPrices, fetchFinancialSummary } from '../jquants/client'
+import { fetchEquitiesMaster, fetchDailyPrices, fetchDailyPricesAll, fetchFinancialSummary } from '../jquants/client'
 
 const BATCH_SIZE = 500
 
@@ -177,9 +177,67 @@ export async function syncFinancialSummary(
   return rows.length
 }
 
-// 全銘柄の株価・財務を一括同期（Cron ハンドラー用）
-// from/to: YYYY-MM-DD（例: 直近7日間）
-// レート制限（5 req/min）対応: 各 API 呼び出しの間に sleep(200)
+// 全銘柄の日足株価を1日分一括同期 — 1リクエストで全銘柄取得
+// date: YYYY-MM-DD
+export async function syncDailyPricesAll(db: Db, apiKey: string, date: string): Promise<number> {
+  const bars = await fetchDailyPricesAll(apiKey, date)
+  if (bars.length === 0) return 0
+
+  const rows = bars.map(b => ({
+    code:      b.Code,
+    date:      b.Date,
+    open:      b.O?.toString()         ?? null,
+    high:      b.H?.toString()         ?? null,
+    low:       b.L?.toString()         ?? null,
+    close:     b.C?.toString()         ?? null,
+    volume:    b.Vo?.toString()        ?? null,
+    turnover:  b.Va?.toString()        ?? null,
+    adjFactor: b.AdjFactor?.toString() ?? null,
+    adjOpen:   b.AdjO?.toString()      ?? null,
+    adjHigh:   b.AdjH?.toString()      ?? null,
+    adjLow:    b.AdjL?.toString()      ?? null,
+    adjClose:  b.AdjC?.toString()      ?? null,
+    adjVolume: b.AdjVo?.toString()     ?? null,
+  }))
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    await db.insert(dailyPrices)
+      .values(rows.slice(i, i + BATCH_SIZE))
+      .onConflictDoUpdate({
+        target: [dailyPrices.code, dailyPrices.date],
+        set: {
+          open:      sql`excluded.open`,
+          high:      sql`excluded.high`,
+          low:       sql`excluded.low`,
+          close:     sql`excluded.close`,
+          volume:    sql`excluded.volume`,
+          turnover:  sql`excluded.turnover`,
+          adjFactor: sql`excluded.adj_factor`,
+          adjOpen:   sql`excluded.adj_open`,
+          adjHigh:   sql`excluded.adj_high`,
+          adjLow:    sql`excluded.adj_low`,
+          adjClose:  sql`excluded.adj_close`,
+          adjVolume: sql`excluded.adj_volume`,
+        },
+      })
+  }
+  return rows.length
+}
+
+// 全銘柄の株価・財務を一括同期（GitHub Actions / Cron ハンドラー用）
+// from/to: YYYY-MM-DD
+// 株価: 日付単位バルク取得（1日1リクエスト）
+// 財務: 銘柄単位（1銘柄1リクエスト）
+// Light プラン(60 req/min) 対応: sleep(1000ms) で ~50 req/min
+function datesBetween(from: string, to: string): string[] {
+  const dates: string[] = []
+  const end = new Date(to)
+  for (const d = new Date(from); d <= end; d.setDate(d.getDate() + 1)) {
+    dates.push(d.toISOString().slice(0, 10))
+  }
+  return dates
+}
+
 export async function syncAllStocks(
   db: Db,
   apiKey: string,
@@ -187,16 +245,19 @@ export async function syncAllStocks(
   to: string,
 ): Promise<{ masterCount: number; priceCount: number; finCount: number }> {
   const masterCount = await syncStockMaster(db, apiKey)
+  await sleep(1000)
 
-  const stocks = await db.select({ code: stockMaster.code }).from(stockMaster)
-
+  // 株価: 日付ごとに全銘柄一括取得（N日分 = N リクエスト）
   let priceCount = 0
-  let finCount = 0
-
-  // Light プラン: 60 req/min → 1000ms sleep で ~50 req/min に抑える
-  for (const { code } of stocks) {
-    priceCount += await syncDailyPrices(db, apiKey, code, from, to)
+  for (const date of datesBetween(from, to)) {
+    priceCount += await syncDailyPricesAll(db, apiKey, date)
     await sleep(1000)
+  }
+
+  // 財務: 銘柄ごとに取得（4400 リクエスト）
+  const stocks = await db.select({ code: stockMaster.code }).from(stockMaster)
+  let finCount = 0
+  for (const { code } of stocks) {
     finCount += await syncFinancialSummary(db, apiKey, code)
     await sleep(1000)
   }

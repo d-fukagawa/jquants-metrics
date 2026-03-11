@@ -45,7 +45,7 @@ export async function fetchEquitiesMaster(
   return data.data
 }
 
-// 日足株価を取得する
+// 日足株価を取得する（1銘柄 × 期間）
 // code: 5桁 (例: "72030")
 // from/to: YYYY-MM-DD
 export async function fetchDailyPrices(
@@ -55,6 +55,16 @@ export async function fetchDailyPrices(
   to: string,
 ): Promise<DailyBar[]> {
   const data = await get<DailyBarsResponse>(apiKey, '/equities/bars/daily', { code, from, to })
+  return data.data
+}
+
+// 日足株価を取得する（全銘柄 × 1日）— 1リクエストで全銘柄分を取得
+// date: YYYY-MM-DD
+export async function fetchDailyPricesAll(
+  apiKey: string,
+  date: string,
+): Promise<DailyBar[]> {
+  const data = await get<DailyBarsResponse>(apiKey, '/equities/bars/daily', { date })
   return data.data
 }
 
