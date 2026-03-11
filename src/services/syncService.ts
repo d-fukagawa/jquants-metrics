@@ -193,11 +193,12 @@ export async function syncAllStocks(
   let priceCount = 0
   let finCount = 0
 
+  // Light プラン: 60 req/min → 1000ms sleep で ~50 req/min に抑える
   for (const { code } of stocks) {
     priceCount += await syncDailyPrices(db, apiKey, code, from, to)
-    await sleep(500)
+    await sleep(1000)
     finCount += await syncFinancialSummary(db, apiKey, code)
-    await sleep(500)
+    await sleep(1000)
   }
 
   return { masterCount, priceCount, finCount }
