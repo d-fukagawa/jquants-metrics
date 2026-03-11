@@ -9,7 +9,9 @@ import type {
 
 const BASE_URL = 'https://api.jquants.com/v2'
 
-async function get<T>(apiKey: string, path: string, params?: Record<string, string>): Promise<T> {
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
+async function get<T>(apiKey: string, path: string, params?: Record<string, string>, retries = 3): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`)
   if (params) {
     for (const [k, v] of Object.entries(params)) {
@@ -19,6 +21,12 @@ async function get<T>(apiKey: string, path: string, params?: Record<string, stri
   const res = await fetch(url.toString(), {
     headers: { 'x-api-key': apiKey },
   })
+  if (res.status === 429 && retries > 0) {
+    const wait = 60_000  // 1 分待機してリトライ
+    console.warn(`[jquants] 429 rate limit — waiting ${wait / 1000}s (retries left: ${retries - 1})`)
+    await sleep(wait)
+    return get<T>(apiKey, path, params, retries - 1)
+  }
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`JQuants API error ${res.status}: ${text}`)

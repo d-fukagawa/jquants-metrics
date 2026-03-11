@@ -195,9 +195,9 @@ export async function syncAllStocks(
 
   for (const { code } of stocks) {
     priceCount += await syncDailyPrices(db, apiKey, code, from, to)
-    await sleep(200)
+    await sleep(500)
     finCount += await syncFinancialSummary(db, apiKey, code)
-    await sleep(200)
+    await sleep(500)
   }
 
   return { masterCount, priceCount, finCount }
