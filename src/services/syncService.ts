@@ -109,6 +109,7 @@ export async function syncDailyPrices(
   return rows.length
 }
 
+
 // 財務情報同期 — /v2/fins/summary
 export async function syncFinancialSummary(
   db: Db,

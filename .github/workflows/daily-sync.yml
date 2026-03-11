@@ -1,0 +1,36 @@
+name: Daily Data Sync
+
+on:
+  schedule:
+    # 平日 07:00 UTC（日本時間 16:00、東証クローズ後）に実行
+    - cron: '0 7 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      from:
+        description: '株価取得開始日 (YYYY-MM-DD)。省略時は前日'
+        required: false
+      to:
+        description: '株価取得終了日 (YYYY-MM-DD)。省略時は前日'
+        required: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 最大 3 時間（4,400 銘柄 × 400ms ≒ 30 分）
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: 全銘柄データ同期
+        env:
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          SYNC_FROM:       ${{ inputs.from }}
+          SYNC_TO:         ${{ inputs.to }}
+        run: npx tsx scripts/daily-sync.ts

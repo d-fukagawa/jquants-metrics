@@ -5,7 +5,7 @@ import { syncStockMaster, syncDailyPrices, syncFinancialSummary } from '../servi
 
 type SyncBody =
   | { target: 'master' }
-  | { target: 'prices';    code: string; from?: string; to?: string }
+  | { target: 'prices';     code: string; from?: string; to?: string }
   | { target: 'financials'; code: string }
 
 const CODE_RE = /^\d{4}$/
