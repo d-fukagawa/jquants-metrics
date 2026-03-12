@@ -244,23 +244,39 @@ export async function syncAllStocks(
   from: string,
   to: string,
 ): Promise<{ masterCount: number; priceCount: number; finCount: number }> {
+  // 銘柄マスタ
+  console.log('[sync] master: start')
   const masterCount = await syncStockMaster(db, apiKey)
+  console.log(`[sync] master: done  count=${masterCount}`)
   await sleep(1000)
 
   // 株価: 日付ごとに全銘柄一括取得（N日分 = N リクエスト）
+  const dates = datesBetween(from, to)
+  console.log(`[sync] prices: start  dates=${dates.join(',')}`)
   let priceCount = 0
-  for (const date of datesBetween(from, to)) {
-    priceCount += await syncDailyPricesAll(db, apiKey, date)
+  for (const date of dates) {
+    const n = await syncDailyPricesAll(db, apiKey, date)
+    priceCount += n
+    console.log(`[sync] prices: date=${date}  rows=${n}`)
     await sleep(1000)
   }
+  console.log(`[sync] prices: done  total=${priceCount}`)
 
   // 財務: 銘柄ごとに取得（4400 リクエスト）
   const stocks = await db.select({ code: stockMaster.code }).from(stockMaster)
+  console.log(`[sync] financials: start  stocks=${stocks.length}`)
   let finCount = 0
+  let finDone = 0
   for (const { code } of stocks) {
-    finCount += await syncFinancialSummary(db, apiKey, code)
+    const n = await syncFinancialSummary(db, apiKey, code)
+    finCount += n
+    finDone++
+    if (finDone % 100 === 0) {
+      console.log(`[sync] financials: progress  ${finDone}/${stocks.length}  rows=${finCount}`)
+    }
     await sleep(1000)
   }
+  console.log(`[sync] financials: done  total=${finCount}`)
 
   return { masterCount, priceCount, finCount }
 }
