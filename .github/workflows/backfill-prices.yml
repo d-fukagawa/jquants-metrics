@@ -1,0 +1,44 @@
+name: Backfill Daily Prices
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: '取得開始日 (YYYY-MM-DD)。省略時は180日前/JST'
+        required: false
+      to:
+        description: '取得終了日 (YYYY-MM-DD)。省略時は昨日/JST'
+        required: false
+      include_weekends:
+        description: '土日も取得対象に含めるか (true/false)'
+        required: false
+        default: 'false'
+      retry_per_date:
+        description: '日付ごとのリトライ回数'
+        required: false
+        default: '3'
+
+jobs:
+  backfill-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: 過去日次株価バックフィル（全銘柄）
+        env:
+          DATABASE_URL:     ${{ secrets.DATABASE_URL }}
+          JQUANTS_API_KEY:  ${{ secrets.JQUANTS_API_KEY }}
+          BACKFILL_FROM:    ${{ inputs.from }}
+          BACKFILL_TO:      ${{ inputs.to }}
+          INCLUDE_WEEKENDS: ${{ inputs.include_weekends }}
+          RETRY_PER_DATE:   ${{ inputs.retry_per_date }}
+        run: npx tsx scripts/backfill-prices.ts
+
