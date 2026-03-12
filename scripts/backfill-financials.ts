@@ -11,6 +11,7 @@
  *   SHARDS            総シャード数（省略時: 1）
  *   SLEEP_MS          銘柄ごとの待機ms（省略時: 1000）
  *   RETRY_PER_CODE    銘柄ごとのリトライ回数（省略時: 2）
+ *   INCLUDE_DETAILS   true のとき fins_details も同期（省略時: true）
  */
 
 import { createDb } from '../src/db/client'
@@ -29,6 +30,12 @@ const sleepMs = Math.max(0, Number(process.env.SLEEP_MS ?? '1000') || 1000)
 const retryPerCode = Math.max(0, Number(process.env.RETRY_PER_CODE ?? '2') || 2)
 const shards = Math.max(1, Number(process.env.SHARDS ?? '1') || 1)
 const shard = Math.min(shards - 1, Math.max(0, Number(process.env.SHARD ?? '0') || 0))
+let includeDetails = (process.env.INCLUDE_DETAILS ?? 'true').toLowerCase() === 'true'
+
+function isSubscriptionError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e)
+  return msg.includes('not available on your subscription')
+}
 
 async function withRetry<T>(fn: () => Promise<T>, retries: number): Promise<T> {
   let attempt = 0
@@ -50,7 +57,9 @@ const db = createDb(databaseUrl)
 const stocks = await db.select({ code: stockMaster.code }).from(stockMaster)
 const target = stocks.filter((_, i) => i % shards === shard)
 
-console.log(`[fin-backfill] start shard=${shard}/${shards} target=${target.length} total=${stocks.length} sleepMs=${sleepMs} retry=${retryPerCode}`)
+console.log(
+  `[fin-backfill] start shard=${shard}/${shards} target=${target.length} total=${stocks.length} sleepMs=${sleepMs} retry=${retryPerCode} includeDetails=${includeDetails}`,
+)
 
 let finCount = 0
 let detailsCount = 0
@@ -60,8 +69,20 @@ for (const { code } of target) {
   finCount += nFin
   await sleep(sleepMs)
 
-  const nDetails = await withRetry(() => syncFinsDetails(db, apiKey, code), retryPerCode)
-  detailsCount += nDetails
+  if (includeDetails) {
+    try {
+      const nDetails = await withRetry(() => syncFinsDetails(db, apiKey, code), retryPerCode)
+      detailsCount += nDetails
+    } catch (e) {
+      if (isSubscriptionError(e)) {
+        includeDetails = false
+        const message = e instanceof Error ? e.message : String(e)
+        console.warn(`[fin-backfill] details disabled: ${message}`)
+      } else {
+        throw e
+      }
+    }
+  }
   done++
 
   if (done % 50 === 0 || done === target.length) {
@@ -70,5 +91,4 @@ for (const { code } of target) {
   await sleep(sleepMs)
 }
 
-console.log(`[fin-backfill] done shard=${shard}/${shards} processed=${done} finRows=${finCount} detailRows=${detailsCount}`)
-
+console.log(`[fin-backfill] done shard=${shard}/${shards} processed=${done} finRows=${finCount} detailRows=${detailsCount} includeDetails=${includeDetails}`)

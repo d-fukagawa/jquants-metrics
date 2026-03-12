@@ -7,7 +7,7 @@ import { syncRoute }   from './routes/sync'
 import { screenRoute } from './routes/screen'
 import { syncStatusRoute } from './routes/syncStatus'
 import { createDb }    from './db/client'
-import { syncAllStocks } from './services/syncService'
+import { syncStockMaster, syncDailyPricesAll } from './services/syncService'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -33,7 +33,16 @@ export default {
     const weekAgo = new Date(today)
     weekAgo.setDate(weekAgo.getDate() - 7)
     const fromStr = weekAgo.toISOString().slice(0, 10)
+    const dates: string[] = []
+    for (const d = new Date(fromStr); d <= new Date(todayStr); d.setDate(d.getDate() + 1)) {
+      dates.push(d.toISOString().slice(0, 10))
+    }
 
-    ctx.waitUntil(syncAllStocks(db, env.JQUANTS_API_KEY, fromStr, todayStr))
+    ctx.waitUntil((async () => {
+      await syncStockMaster(db, env.JQUANTS_API_KEY)
+      for (const date of dates) {
+        await syncDailyPricesAll(db, env.JQUANTS_API_KEY, date)
+      }
+    })())
   },
 }

@@ -186,6 +186,11 @@ gh workflow run backfill-prices.yml --ref main -f from=2025-08-01 -f to=2025-08-
   - 財務バックフィル実行後に `/sync-status` と `/screen` を確認
   - `EV/EBITDA`・`NC比率` 表示率の改善を確認
 
+補足（2026-03-12 実行ログ）:
+- `fins/details` API が契約プラン未対応の場合、`403 not available on your subscription` が返る
+- `backfill-financials` は `INCLUDE_DETAILS=true` で開始し、403 検出時は自動で details 同期を無効化して `financial_summary` のみ継続する
+- 詳細指標（EV/EBITDA・NC比率）の本格改善には、`fins/details` 利用可能プランへの変更が必要
+
 完了条件:
 - [ ] `fins_details` 銘柄カバレッジ 80% 以上
 - [ ] `EV/EBITDA` が表示される銘柄数が有意に増加（実行前後で比較）
