@@ -96,19 +96,39 @@ async function main() {
     const changed: string[] = []
 
     for (const code of targets) {
-      const n = await syncEdinetTimeline(db, apiKey, code, fromDate, toDate)
-      timelineRows += n
-      if (n > 0) changed.push(code)
+      try {
+        const n = await syncEdinetTimeline(db, apiKey, code, fromDate, toDate)
+        timelineRows += n
+        if (n > 0) changed.push(code)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.warn(`[edinet-watch-sync] timeline failed code=${code} reason=${msg}`)
+      }
       await sleep(sleepMs)
     }
 
     const deepTargets = changed.slice(0, maxDeepDaily)
     for (const code of deepTargets) {
-      qualityRows += await syncEdinetQualityScores(db, apiKey, code)
+      try {
+        qualityRows += await syncEdinetQualityScores(db, apiKey, code)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.warn(`[edinet-watch-sync] quality failed code=${code} reason=${msg}`)
+      }
       await sleep(sleepMs)
-      textRows += await syncEdinetTextScores(db, apiKey, code)
+      try {
+        textRows += await syncEdinetTextScores(db, apiKey, code)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.warn(`[edinet-watch-sync] text failed code=${code} reason=${msg}`)
+      }
       await sleep(sleepMs)
-      bridgeRows += await syncEdinetBridge(db, apiKey, code)
+      try {
+        bridgeRows += await syncEdinetBridge(db, apiKey, code)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.warn(`[edinet-watch-sync] bridge failed code=${code} reason=${msg}`)
+      }
       await sleep(sleepMs)
     }
 
@@ -120,11 +140,26 @@ async function main() {
 
   const targets = uniqueCodes.slice(0, maxCodesWeekly)
   for (const code of targets) {
-    qualityRows += await syncEdinetQualityScores(db, apiKey, code)
+    try {
+      qualityRows += await syncEdinetQualityScores(db, apiKey, code)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.warn(`[edinet-watch-sync] quality failed code=${code} reason=${msg}`)
+    }
     await sleep(sleepMs)
-    textRows += await syncEdinetTextScores(db, apiKey, code)
+    try {
+      textRows += await syncEdinetTextScores(db, apiKey, code)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.warn(`[edinet-watch-sync] text failed code=${code} reason=${msg}`)
+    }
     await sleep(sleepMs)
-    bridgeRows += await syncEdinetBridge(db, apiKey, code)
+    try {
+      bridgeRows += await syncEdinetBridge(db, apiKey, code)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.warn(`[edinet-watch-sync] bridge failed code=${code} reason=${msg}`)
+    }
     await sleep(sleepMs)
   }
 

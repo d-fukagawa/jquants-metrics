@@ -44,6 +44,21 @@ function toStr(v: unknown): string | null {
   return s === '' ? null : s
 }
 
+function toDateOrNull(v: unknown): string | null {
+  const s = toStr(v)
+  if (!s) return null
+
+  // YYYY
+  if (/^\d{4}$/.test(s)) return `${s}-03-31`
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+
+  // RFC2822 or other parseable date strings
+  const d = new Date(s)
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  return null
+}
+
 export async function searchCompanyByCode(apiKey: string, code4: string): Promise<EdinetSearchCompany[]> {
   const raw = await getJson(apiKey, '/search', { q: code4 })
   const rows = pickArray(raw)
@@ -107,7 +122,7 @@ export async function fetchCompanyBridgeFacts(apiKey: string, edinetCode: string
     netProfit: toStr(r.netProfit ?? r.np ?? r.net_profit ?? r.net_income),
     cfo: toStr(r.cfo ?? r.cashflowOperating ?? r.operating_cf ?? r.cf_operating),
     depreciation: toStr(r.depreciation ?? r.dna ?? r.depreciation_and_amortization),
-    disclosedAt: toStr(r.disclosedAt ?? r.disclosed_at ?? r.filingDate ?? r.fiscal_year),
+    disclosedAt: toDateOrNull(r.disclosedAt ?? r.disclosed_at ?? r.filingDate ?? r.fiscal_year),
     sourceDocId: toStr(r.sourceDocId ?? r.source_doc_id ?? r.docId),
     adjustmentItems: (r.adjustmentItems ?? r.adjustment_items ?? null) as Record<string, unknown> | null,
   })).filter(r => r.fiscalYear)
