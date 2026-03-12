@@ -19,6 +19,10 @@ on:
         description: '銘柄ごとのリトライ回数'
         required: false
         default: '2'
+      rate_limit_per_min:
+        description: '契約プラン上限 req/min（Light=60）'
+        required: false
+        default: '60'
       include_details:
         description: 'fins_details も同期するか (true/false)'
         required: false
@@ -46,5 +50,6 @@ jobs:
           SHARDS:          ${{ inputs.shards }}
           SLEEP_MS:        ${{ inputs.sleep_ms }}
           RETRY_PER_CODE:  ${{ inputs.retry_per_code }}
+          RATE_LIMIT_PER_MIN: ${{ inputs.rate_limit_per_min }}
           INCLUDE_DETAILS: ${{ inputs.include_details }}
         run: npx tsx scripts/backfill-financials.ts

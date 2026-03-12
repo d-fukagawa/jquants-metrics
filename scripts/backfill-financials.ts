@@ -12,6 +12,7 @@
  *   SLEEP_MS          銘柄ごとの待機ms（省略時: 1000）
  *   RETRY_PER_CODE    銘柄ごとのリトライ回数（省略時: 2）
  *   INCLUDE_DETAILS   true のとき fins_details も同期（省略時: true）
+ *   RATE_LIMIT_PER_MIN 契約プランの上限 req/min（省略時: 60）
  */
 
 import { createDb } from '../src/db/client'
@@ -26,7 +27,10 @@ if (!databaseUrl || !apiKey) {
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
-const sleepMs = Math.max(0, Number(process.env.SLEEP_MS ?? '1000') || 1000)
+const requestedSleepMs = Math.max(0, Number(process.env.SLEEP_MS ?? '1000') || 1000)
+const rateLimitPerMin = Math.max(1, Number(process.env.RATE_LIMIT_PER_MIN ?? '60') || 60)
+const minIntervalMs = Math.ceil(60000 / rateLimitPerMin)
+const sleepMs = Math.max(requestedSleepMs, minIntervalMs)
 const retryPerCode = Math.max(0, Number(process.env.RETRY_PER_CODE ?? '2') || 2)
 const shards = Math.max(1, Number(process.env.SHARDS ?? '1') || 1)
 const shard = Math.min(shards - 1, Math.max(0, Number(process.env.SHARD ?? '0') || 0))
@@ -58,7 +62,7 @@ const stocks = await db.select({ code: stockMaster.code }).from(stockMaster)
 const target = stocks.filter((_, i) => i % shards === shard)
 
 console.log(
-  `[fin-backfill] start shard=${shard}/${shards} target=${target.length} total=${stocks.length} sleepMs=${sleepMs} retry=${retryPerCode} includeDetails=${includeDetails}`,
+  `[fin-backfill] start shard=${shard}/${shards} target=${target.length} total=${stocks.length} sleepMs=${sleepMs} rateLimitPerMin=${rateLimitPerMin} retry=${retryPerCode} includeDetails=${includeDetails}`,
 )
 
 let finCount = 0
@@ -82,13 +86,13 @@ for (const { code } of target) {
         throw e
       }
     }
+    await sleep(sleepMs)
   }
   done++
 
   if (done % 50 === 0 || done === target.length) {
     console.log(`[fin-backfill] progress ${done}/${target.length} code=${code} fins=${finCount} details=${detailsCount}`)
   }
-  await sleep(sleepMs)
 }
 
 console.log(`[fin-backfill] done shard=${shard}/${shards} processed=${done} finRows=${finCount} detailRows=${detailsCount} includeDetails=${includeDetails}`)
