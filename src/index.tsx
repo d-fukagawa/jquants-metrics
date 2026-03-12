@@ -5,6 +5,7 @@ import { homeRoute }   from './routes/home'
 import { stockRoute }  from './routes/stock'
 import { syncRoute }   from './routes/sync'
 import { screenRoute } from './routes/screen'
+import { syncStatusRoute } from './routes/syncStatus'
 import { createDb }    from './db/client'
 import { syncAllStocks } from './services/syncService'
 
@@ -16,6 +17,7 @@ app.route('/',         homeRoute)
 app.route('/stock',    stockRoute)
 app.route('/api/sync', syncRoute)
 app.route('/screen',   screenRoute)
+app.route('/sync-status', syncStatusRoute)
 
 export default {
   fetch: app.fetch.bind(app),

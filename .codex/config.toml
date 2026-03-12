@@ -1,0 +1,16 @@
+# Project-local Codex configuration
+# Reference: https://developers.openai.com/codex/learn/best-practices
+
+model = "gpt-5-codex"
+model_reasoning_effort = "high"
+model_verbosity = "medium"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+web_search = "cached"
+
+# Ensure Codex can discover existing project guidance files.
+project_doc_fallback_filenames = ["AGENTS.md", "CLAUDE.md"]
+
+[sandbox_workspace_write]
+network_access = false
+writable_roots = ['C:\Users\dfuka\OneDrive\ドキュメント\dev\jquants-metrics']

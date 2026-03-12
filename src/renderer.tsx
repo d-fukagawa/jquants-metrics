@@ -16,6 +16,7 @@ export const renderer = jsxRenderer(({ children, wide }: { children: any; wide?:
             <nav class="nav">
               <a href="/" class="nav-link">ホーム</a>
               <a href="/screen" class="nav-link">スクリーニング</a>
+              <a href="/sync-status" class="nav-link">同期状況</a>
             </nav>
           </div>
         </header>
