@@ -247,6 +247,49 @@ ROIC          = NOPAT ÷ 投下資本
 
 ---
 
+## 追加計画: 高度指標データ欠損の補完（2026-03-12）
+
+デプロイ環境のスクリーニング画面で `EV/EBITDA`・`NC比率` が `—` になる銘柄が多い。
+これは価格データだけでなく、`financial_summary`・`fins_details` の欠損が主因である可能性が高い。
+
+### 算出に必要な最小データ
+
+- `daily_prices.adj_close`
+- `financial_summary.op`, `cash_eq`, `sh_out_fy`
+- `fins_details.dna`, `debt_current`, `debt_non_curr`
+
+### 実行方針（順序）
+
+1. 可視化（現状把握）
+   - `sync-status` に高度指標向けカバレッジを追加する
+   - 指標: `fins_details` 銘柄カバレッジ、`dna` 非NULL件数、`EV/EBITDA` 算出可能銘柄数
+
+2. 同期ジョブの責務分離
+   - 日次ジョブ: 株価中心（平日 18:00 JST）
+   - 財務ジョブ: `financial_summary + fins_details`（週次 or 手動）
+   - 長時間の単一ジョブを避け、失敗時の影響範囲を限定
+
+3. 財務バックフィル workflow 追加
+   - `workflow_dispatch` 専用の `backfill-financials.yml` を追加
+   - `shard/shards` 入力で銘柄を分割し、複数回実行で全体を埋める
+   - 進捗ログに `processed/total`, `rows`, `dna null rate` を出力
+
+4. 算出ロジック改善
+   - `latest_details` を「最新1件」ではなく「必要項目が非NULLの最新を優先」に変更
+   - `fins_details` の XBRL キー候補を拡張し `dna` 取得率を改善
+
+5. 検証
+   - バックフィル前後で `EV/EBITDA`・`NC比率` の表示率を比較
+   - `/screen` で該当列の `—` 比率が低下していることを確認
+
+### 受け入れ基準
+
+- `fins_details` 銘柄カバレッジが 80% 以上
+- `EV/EBITDA` の算出可能銘柄数が実行前比で有意に増加
+- スクリーニング条件として `EV/EBITDA`・`NC比率` が実用できる状態
+
+---
+
 ## 検証方法
 
 1. `npm run dev` 起動後、`POST /api/sync` で一部銘柄データを DB に挿入

@@ -128,6 +128,69 @@
 - [x] GitHub Secrets に `DATABASE_URL` / `JQUANTS_API_KEY` を設定
 - [x] 手動実行（`workflow_dispatch`）で同期成功確認
 
+### Step 12-B: 日次株価バックフィル運用（欠損補完） ✅
+
+- [x] `scripts/backfill-prices.ts` を追加（**株価のみ**を日付単位で全銘柄バックフィル）
+  - デフォルト: `BACKFILL_FROM/BACKFILL_TO` 未指定時は **180日前〜昨日（JST）**
+  - 空入力（workflow_dispatch 未入力）を未指定扱いに修正済み
+- [x] `.github/workflows/backfill-prices.yml` を追加（手動実行専用）
+  - `from`, `to`, `include_weekends`, `retry_per_date` を指定可能
+- [x] 実行確認
+  - Run ID: `22993203818`
+  - 状態: `success`
+
+#### 手動実行コマンド（GitHub CLI）
+
+```bash
+# デフォルト実行（180日前〜昨日/JST）
+gh workflow run backfill-prices.yml --ref main
+
+# 任意期間（例: 2025年通年）
+gh workflow run backfill-prices.yml --ref main -f from=2025-01-01 -f to=2025-12-31
+
+# 月単位で遡る（例: 2025-08）
+gh workflow run backfill-prices.yml --ref main -f from=2025-08-01 -f to=2025-08-31
+```
+
+#### 月次で遡る運用メモ
+
+- まず不足が大きい期間から 1 ヶ月単位で実行する
+- 各 run 完了後に `/sync-status` の `daily_prices` 最新日件数・不足数を確認する
+- 目安: 半年分完了後は、必要に応じて四半期ごとに過去を追加バックフィルする
+
+### Step 12-C: EV/EBITDA・NC比率 欠損補完計画（進行中）
+
+目的:
+- スクリーニング画面で `EV/EBITDA` と `NC比率` が `—` になる銘柄を減らす
+- 高度指標の分析精度を担保する
+
+背景:
+- 高度指標の算出には `daily_prices` だけでなく `financial_summary` と `fins_details` の充足が必要
+- 特に `fins_details.dna`（減価償却費）や負債項目欠損で `EV/EBITDA` が null になる
+
+計画:
+- [ ] `sync-status` に高度指標向けのカバレッジ指標を追加
+  - `fins_details` 総件数 / 銘柄カバレッジ
+  - `dna IS NOT NULL` 件数
+  - `EV/EBITDA` 算出可能銘柄数
+- [ ] GitHub Actions を「日次株価」と「財務系」に分離
+  - `daily-sync.yml` は価格中心（平日18:00 JST）
+  - `financial sync` は別 workflow（週次または手動）
+- [ ] `financial_summary + fins_details` のバックフィル workflow を追加
+  - `workflow_dispatch` で手動実行
+  - `shard/shards` を入力可能にして分割実行
+- [ ] `fins_details` 取得ロジックの補強
+  - `dna` の取得キー候補を追加し、取得率改善
+  - `latest_details` 抽出を「最新1件」から「必要項目が非NULLの最新優先」へ改善
+- [ ] 実行と検証
+  - 財務バックフィル実行後に `/sync-status` と `/screen` を確認
+  - `EV/EBITDA`・`NC比率` 表示率の改善を確認
+
+完了条件:
+- [ ] `fins_details` 銘柄カバレッジ 80% 以上
+- [ ] `EV/EBITDA` が表示される銘柄数が有意に増加（実行前後で比較）
+- [ ] スクリーニングで `EV/EBITDA` / `NC比率` フィルターが実用可能
+
 ---
 
 ## Phase 3 — 高度財務指標（fins_details）
