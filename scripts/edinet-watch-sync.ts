@@ -21,13 +21,13 @@
  */
 
 import { createDb } from '../src/db/client'
-import { addToWatchlist, listWatchlist } from '../src/services/watchlistService'
 import {
   syncEdinetBridge,
   syncEdinetQualityScores,
   syncEdinetTextScores,
   syncEdinetTimeline,
 } from '../src/services/edinetSyncService'
+import { sql } from 'drizzle-orm'
 
 const databaseUrl = process.env.DATABASE_URL
 const apiKey = process.env.EDINETDB_API_KEY
@@ -64,14 +64,19 @@ async function main() {
   const db = createDb(databaseUrl)
 
   for (const c4 of bootstrapCodes) {
-    await addToWatchlist(db, `${c4}0`, 'bootstrap')
+    await db.execute(sql`
+      INSERT INTO watchlist (code, note, created_at, updated_at)
+      VALUES (${`${c4}0`}, 'bootstrap', NOW(), NOW())
+      ON CONFLICT (code)
+      DO UPDATE SET note = EXCLUDED.note, updated_at = EXCLUDED.updated_at
+    `)
   }
   if (bootstrapCodes.length > 0) {
     console.log(`[edinet-watch-sync] bootstrap inserted=${bootstrapCodes.length}`)
   }
 
-  const wl = await listWatchlist(db)
-  const uniqueCodes = [...new Set(wl.map(w => w.code))]
+  const wl = await db.execute(sql`SELECT code FROM watchlist ORDER BY created_at DESC`)
+  const uniqueCodes = [...new Set((wl.rows as Array<{ code: string }>).map(w => w.code))]
   if (uniqueCodes.length === 0) {
     console.log('[edinet-watch-sync] watchlist is empty; nothing to sync')
     return
@@ -129,4 +134,3 @@ async function main() {
 }
 
 await main()
-
