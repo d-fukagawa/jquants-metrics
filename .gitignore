@@ -22,3 +22,6 @@ pnpm-debug.log*
 
 # misc
 .DS_Store
+
+# local docs (not versioned)
+doc/*ガイド*.md
