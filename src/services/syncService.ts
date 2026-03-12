@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
-import { stockMaster, dailyPrices, financialSummary } from '../db/schema'
-import { fetchEquitiesMaster, fetchDailyPrices, fetchDailyPricesAll, fetchFinancialSummary } from '../jquants/client'
+import { stockMaster, dailyPrices, financialSummary, finsDetails } from '../db/schema'
+import { fetchEquitiesMaster, fetchDailyPrices, fetchDailyPricesAll, fetchFinancialSummary, fetchFinsDetails } from '../jquants/client'
 
 const BATCH_SIZE = 500
 
@@ -11,6 +11,23 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
 function toNum(s: string | null | undefined): string | null {
   return s === null || s === undefined || s === '' ? null : s
 }
+
+// XBRL キー名の候補から最初にマッチする値を返す
+function firstMatch(stmt: Record<string, string>, keys: readonly string[]): string | null {
+  for (const k of keys) {
+    const v = stmt[k]
+    if (v !== undefined && v !== null && v !== '') return v
+  }
+  return null
+}
+
+const KEYS = {
+  debtCurrent:  ['Bonds and borrowings - CL (IFRS)', 'Borrowings - CL (IFRS)', 'Short-term borrowings', 'Short-term loans payable'],
+  debtNonCurr:  ['Bonds and borrowings - NCL (IFRS)', 'Borrowings - NCL (IFRS)', 'Long-term borrowings', 'Long-term loans payable'],
+  dna:          ['Depreciation and amortization - OpeCF (IFRS)', 'Depreciation and amortization', 'DepreciationAndAmortization'],
+  pretaxProfit: ['Profit (loss) before tax from continuing operations (IFRS)', 'Profit before tax', 'PBT', 'IncomeBeforeIncomeTaxes'],
+  taxExpense:   ['Income tax expense (IFRS)', 'Income taxes', 'Tax expense', 'IncomeTaxes'],
+} as const
 
 // 銘柄マスタ同期 — /v2/equities/master
 export async function syncStockMaster(db: Db, apiKey: string): Promise<number> {
@@ -177,6 +194,52 @@ export async function syncFinancialSummary(
   return rows.length
 }
 
+// 詳細財務情報同期 — /v2/fins/details
+export async function syncFinsDetails(
+  db: Db,
+  apiKey: string,
+  code: string,
+): Promise<number> {
+  const details = await fetchFinsDetails(apiKey, code)
+  if (details.length === 0) return 0
+
+  const rows = details.map(d => {
+    const stmt = d.Statement ?? {}
+    return {
+      code:         d.LocalCode ?? d.Code ?? code,
+      discNo:       d.DisclosureNumber,
+      discDate:     d.DisclosedDate    || null,
+      docType:      d.TypeOfDocument   || null,
+      curPerType:   d.TypeOfCurrentPeriod || null,
+      debtCurrent:  toNum(firstMatch(stmt, KEYS.debtCurrent)),
+      debtNonCurr:  toNum(firstMatch(stmt, KEYS.debtNonCurr)),
+      dna:          toNum(firstMatch(stmt, KEYS.dna)),
+      pretaxProfit: toNum(firstMatch(stmt, KEYS.pretaxProfit)),
+      taxExpense:   toNum(firstMatch(stmt, KEYS.taxExpense)),
+    }
+  }).filter(r => r.discNo)
+
+  if (rows.length === 0) return 0
+
+  await db.insert(finsDetails)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [finsDetails.code, finsDetails.discNo],
+      set: {
+        discDate:     sql`excluded.disc_date`,
+        docType:      sql`excluded.doc_type`,
+        curPerType:   sql`excluded.cur_per_type`,
+        debtCurrent:  sql`excluded.debt_current`,
+        debtNonCurr:  sql`excluded.debt_non_curr`,
+        dna:          sql`excluded.dna`,
+        pretaxProfit: sql`excluded.pretax_profit`,
+        taxExpense:   sql`excluded.tax_expense`,
+      },
+    })
+
+  return rows.length
+}
+
 // 全銘柄の日足株価を1日分一括同期 — 1リクエストで全銘柄取得
 // date: YYYY-MM-DD
 export async function syncDailyPricesAll(db: Db, apiKey: string, date: string): Promise<number> {
@@ -243,7 +306,7 @@ export async function syncAllStocks(
   apiKey: string,
   from: string,
   to: string,
-): Promise<{ masterCount: number; priceCount: number; finCount: number }> {
+): Promise<{ masterCount: number; priceCount: number; finCount: number; finDetailsCount: number }> {
   // 銘柄マスタ
   console.log('[sync] master: start')
   const masterCount = await syncStockMaster(db, apiKey)
@@ -262,21 +325,26 @@ export async function syncAllStocks(
   }
   console.log(`[sync] prices: done  total=${priceCount}`)
 
-  // 財務: 銘柄ごとに取得（4400 リクエスト）
+  // 財務サマリー + 詳細財務: 銘柄ごとに取得（各 ~4400 リクエスト）
   const stocks = await db.select({ code: stockMaster.code }).from(stockMaster)
   console.log(`[sync] financials: start  stocks=${stocks.length}`)
   let finCount = 0
+  let finDetailsCount = 0
   let finDone = 0
   for (const { code } of stocks) {
     const n = await syncFinancialSummary(db, apiKey, code)
     finCount += n
+    await sleep(1000)
+
+    const nd = await syncFinsDetails(db, apiKey, code)
+    finDetailsCount += nd
     finDone++
     if (finDone % 100 === 0) {
-      console.log(`[sync] financials: progress  ${finDone}/${stocks.length}  rows=${finCount}`)
+      console.log(`[sync] financials: progress  ${finDone}/${stocks.length}  fins=${finCount}  details=${finDetailsCount}`)
     }
     await sleep(1000)
   }
-  console.log(`[sync] financials: done  total=${finCount}`)
+  console.log(`[sync] financials: done  fins=${finCount}  details=${finDetailsCount}`)
 
-  return { masterCount, priceCount, finCount }
+  return { masterCount, priceCount, finCount, finDetailsCount }
 }

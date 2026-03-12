@@ -76,3 +76,18 @@ export interface FinancialSummary {
 export interface FinsSummaryResponse {
   data: FinancialSummary[]
 }
+
+// GET /v2/fins/details
+export interface FinsDetail {
+  LocalCode:           string   // 5桁 (例: "72030")
+  Code?:               string   // 念のためオプショナル（フィールド名が揺れる可能性）
+  DisclosureNumber:    string   // 開示番号 (PK)
+  DisclosedDate:       string   // 開示日 (YYYY-MM-DD)
+  TypeOfDocument:      string   // 開示種別
+  TypeOfCurrentPeriod: string   // 1Q / 2Q / 3Q / 4Q / FY
+  Statement:           Record<string, string>  // XBRL 要素名 → 数値文字列
+}
+
+export interface FinsDetailsResponse {
+  data: FinsDetail[]
+}

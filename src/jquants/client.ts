@@ -5,6 +5,8 @@ import type {
   DailyBar,
   FinsSummaryResponse,
   FinancialSummary,
+  FinsDetailsResponse,
+  FinsDetail,
 } from './types'
 
 const BASE_URL = 'https://api.jquants.com/v2'
@@ -79,5 +81,15 @@ export async function fetchFinancialSummary(
   const params: Record<string, string> = { code }
   if (date) params.date = date
   const data = await get<FinsSummaryResponse>(apiKey, '/fins/summary', params)
+  return data.data
+}
+
+// 詳細財務情報を取得する（XBRL ベース）
+// code: 5桁 (例: "72030")
+export async function fetchFinsDetails(
+  apiKey: string,
+  code: string,
+): Promise<FinsDetail[]> {
+  const data = await get<FinsDetailsResponse>(apiKey, '/fins/details', { code })
   return data.data
 }

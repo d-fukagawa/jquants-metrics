@@ -1,12 +1,13 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { createDb } from '../db/client'
-import { syncStockMaster, syncDailyPrices, syncFinancialSummary } from '../services/syncService'
+import { syncStockMaster, syncDailyPrices, syncFinancialSummary, syncFinsDetails } from '../services/syncService'
 
 type SyncBody =
   | { target: 'master' }
   | { target: 'prices';     code: string; from?: string; to?: string }
   | { target: 'financials'; code: string }
+  | { target: 'fins_details'; code: string }
 
 const CODE_RE = /^\d{4}$/
 
@@ -46,6 +47,11 @@ syncRoute.post('/', async (c) => {
         if (!CODE_RE.test(body.code ?? '')) return c.json({ error: 'code must be a 4-digit number' }, 400)
         const synced = await syncFinancialSummary(db, apiKey, body.code)
         return c.json({ ok: true, target: 'financials', code: body.code, synced })
+      }
+      case 'fins_details': {
+        if (!CODE_RE.test(body.code ?? '')) return c.json({ error: 'code must be a 4-digit number' }, 400)
+        const synced = await syncFinsDetails(db, apiKey, body.code + '0')
+        return c.json({ ok: true, target: 'fins_details', code: body.code, synced })
       }
       default:
         return c.json({ error: 'invalid target' }, 400)

@@ -132,18 +132,18 @@
 
 ## Phase 3 — 高度財務指標（fins_details）
 
-### Step 13: fins_details 同期
+### Step 13: fins_details 同期 ✅
 
-- [ ] `src/db/schema.ts` に `fins_details` テーブル追加
+- [x] `src/db/schema.ts` に `fins_details` テーブル追加
   - 有利子負債（流動/非流動）・減価償却費・D&A
-- [ ] `src/jquants/client.ts` — `fetchFinsDetails` 追加
-- [ ] `src/services/syncService.ts` — `syncFinsDetails` 追加
+- [x] `src/jquants/client.ts` — `fetchFinsDetails` 追加
+- [x] `src/services/syncService.ts` — `syncFinsDetails` 追加
 
-### Step 14: 高度指標計算 & 表示
+### Step 14: 高度指標計算 & 表示 ✅
 
-- [ ] ネットキャッシュ、EV、EBITDA、EV/EBITDA、ROIC の計算ロジック追加
-- [ ] スクリーニング条件に EV/EBITDA・ネットキャッシュ比率を追加
-- [ ] 銘柄分析ページに高度指標セクションを追加
+- [x] ネットキャッシュ、EV、EBITDA、EV/EBITDA、ROIC の計算ロジック追加
+- [x] スクリーニング条件に EV/EBITDA・ネットキャッシュ比率を追加
+- [x] 銘柄分析ページに高度指標セクションを追加
 
 ---
 

@@ -24,24 +24,29 @@ const SORT_OPTIONS = [
   { value: 'roe_desc',       label: 'ROE 降順' },
   { value: 'div_yield_desc', label: '配当利回り 降順' },
   { value: 'mktcap_desc',    label: '時価総額 降順' },
+  { value: 'ev_ebitda_asc',  label: 'EV/EBITDA 昇順' },
 ]
 
 screenRoute.get('/', async (c) => {
   const q = (k: string) => c.req.query(k)
 
   const filters: ScreenFilters = {
-    perMin:      parseNum(q('per_min')),
-    perMax:      parseNum(q('per_max')),
-    pbrMin:      parseNum(q('pbr_min')),
-    pbrMax:      parseNum(q('pbr_max')),
-    roeMin:      parseNum(q('roe_min')),
-    roeMax:      parseNum(q('roe_max')),
-    divYieldMin: parseNum(q('div_yield_min')),
-    divYieldMax: parseNum(q('div_yield_max')),
-    eqArMin:     parseNum(q('eq_ar_min')),
-    eqArMax:     parseNum(q('eq_ar_max')),
-    psrMin:      parseNum(q('psr_min')),
-    psrMax:      parseNum(q('psr_max')),
+    perMin:          parseNum(q('per_min')),
+    perMax:          parseNum(q('per_max')),
+    pbrMin:          parseNum(q('pbr_min')),
+    pbrMax:          parseNum(q('pbr_max')),
+    roeMin:          parseNum(q('roe_min')),
+    roeMax:          parseNum(q('roe_max')),
+    divYieldMin:     parseNum(q('div_yield_min')),
+    divYieldMax:     parseNum(q('div_yield_max')),
+    eqArMin:         parseNum(q('eq_ar_min')),
+    eqArMax:         parseNum(q('eq_ar_max')),
+    psrMin:          parseNum(q('psr_min')),
+    psrMax:          parseNum(q('psr_max')),
+    evEbitdaMin:     parseNum(q('ev_ebitda_min')),
+    evEbitdaMax:     parseNum(q('ev_ebitda_max')),
+    netCashRatioMin: parseNum(q('nc_ratio_min')),
+    netCashRatioMax: parseNum(q('nc_ratio_max')),
     profitOnly:  q('profit_only') === '1',
     cfoPositive: q('cfo_positive') === '1',
     mkt:         c.req.queries('mkt') ?? [],
@@ -68,8 +73,12 @@ screenRoute.get('/', async (c) => {
     if (filters.divYieldMax != null) params.set('div_yield_max', String(filters.divYieldMax))
     if (filters.eqArMin     != null) params.set('eq_ar_min',     String(filters.eqArMin))
     if (filters.eqArMax     != null) params.set('eq_ar_max',     String(filters.eqArMax))
-    if (filters.psrMin      != null) params.set('psr_min',       String(filters.psrMin))
-    if (filters.psrMax      != null) params.set('psr_max',       String(filters.psrMax))
+    if (filters.psrMin          != null) params.set('psr_min',       String(filters.psrMin))
+    if (filters.psrMax          != null) params.set('psr_max',       String(filters.psrMax))
+    if (filters.evEbitdaMin     != null) params.set('ev_ebitda_min', String(filters.evEbitdaMin))
+    if (filters.evEbitdaMax     != null) params.set('ev_ebitda_max', String(filters.evEbitdaMax))
+    if (filters.netCashRatioMin != null) params.set('nc_ratio_min',  String(filters.netCashRatioMin))
+    if (filters.netCashRatioMax != null) params.set('nc_ratio_max',  String(filters.netCashRatioMax))
     if (filters.profitOnly)          params.set('profit_only',   '1')
     if (filters.cfoPositive)         params.set('cfo_positive',  '1')
     for (const m of (filters.mkt ?? [])) params.append('mkt', m)
@@ -198,6 +207,26 @@ screenRoute.get('/', async (c) => {
 
             <hr class="divider" />
 
+            {/* EV/EBITDA */}
+            <div>
+              <div class="fg-label">EV/EBITDA（倍）</div>
+              <div class="range-row">
+                <input class="input-sm" type="number" name="ev_ebitda_min" step="0.1" placeholder="下限" value={filters.evEbitdaMin ?? ''} min="0" />
+                <span class="range-sep">〜</span>
+                <input class="input-sm" type="number" name="ev_ebitda_max" step="0.1" placeholder="上限" value={filters.evEbitdaMax ?? ''} min="0" />
+              </div>
+            </div>
+
+            {/* ネットキャッシュ比率 */}
+            <div>
+              <div class="fg-label">NC比率（ネットキャッシュ/時価総額）</div>
+              <div class="range-row">
+                <input class="input-sm" type="number" name="nc_ratio_min" step="0.01" placeholder="下限" value={filters.netCashRatioMin ?? ''} />
+                <span class="range-sep">〜</span>
+                <input class="input-sm" type="number" name="nc_ratio_max" step="0.01" placeholder="上限" value={filters.netCashRatioMax ?? ''} />
+              </div>
+            </div>
+
             {/* クオリティ */}
             <div>
               <div class="fg-label">クオリティ</div>
@@ -265,12 +294,14 @@ screenRoute.get('/', async (c) => {
                   <th class="r">配当利回</th>
                   <th class="r">自己資本比率</th>
                   <th class="r">PSR</th>
+                  <th class="r">EV/EBITDA</th>
+                  <th class="r">NC比率</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colspan={11} style="text-align:center;color:var(--muted-fg);padding:40px">
+                    <td colspan={13} style="text-align:center;color:var(--muted-fg);padding:40px">
                       条件に一致する銘柄がありません
                     </td>
                   </tr>
@@ -296,6 +327,8 @@ screenRoute.get('/', async (c) => {
                       <td class="r">{r.divYield != null ? `${r.divYield}%` : '—'}</td>
                       <td class="r">{fmtEqAr(r.eqAr)}</td>
                       <td class="r">{fmtMetric(r.psr, 'x')}</td>
+                      <td class="r">{fmtMetric(r.evEbitda, 'x')}</td>
+                      <td class="r">{r.netCashRatio != null ? `${r.netCashRatio}x` : '—'}</td>
                     </tr>
                   )
                 })}

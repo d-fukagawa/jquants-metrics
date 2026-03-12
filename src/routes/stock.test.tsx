@@ -5,7 +5,7 @@ import * as priceService    from '../services/priceService'
 // calcMetrics / fmtJpy は純粋関数なので実装をそのまま使う
 vi.mock('../services/financialService', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../services/financialService')>()
-  return { ...mod, getLatestFinancials: vi.fn() }
+  return { ...mod, getLatestFinancials: vi.fn(), getFinsDetailsLatest: vi.fn() }
 })
 import * as financialService from '../services/financialService'
 
@@ -73,6 +73,7 @@ describe('GET /stock/:code — not found', () => {
     vi.mocked(stockService.getStockByCode).mockResolvedValue(null)
     vi.mocked(priceService.getRecentPrices).mockResolvedValue([])
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue([])
+    vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
   })
 
   it('returns 404 when stock not found in DB', async () => {
@@ -88,6 +89,7 @@ describe('GET /stock/:code — found', () => {
     vi.mocked(stockService.getStockByCode).mockResolvedValue(STOCK as any)
     vi.mocked(priceService.getRecentPrices).mockResolvedValue(PRICES as any)
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue(FINANCIALS as any)
+    vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
   })
 
   it('returns 200', async () => {
@@ -175,6 +177,7 @@ describe('GET /stock/:code — empty prices / financials', () => {
     vi.mocked(stockService.getStockByCode).mockResolvedValue(STOCK as any)
     vi.mocked(priceService.getRecentPrices).mockResolvedValue([])
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue([])
+    vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
   })
 
   it('shows sync prompt when no price data', async () => {

@@ -8,11 +8,13 @@ export interface ScreenFilters {
   divYieldMin?: number; divYieldMax?: number
   eqArMin?: number; eqArMax?: number  // input in % (0–100); stored as decimal
   psrMin?: number; psrMax?: number
+  evEbitdaMin?: number; evEbitdaMax?: number
+  netCashRatioMin?: number; netCashRatioMax?: number
   profitOnly?: boolean
   cfoPositive?: boolean
   mkt?: string[]       // e.g. ['プライム', 'スタンダード']
   sector17?: string
-  sort?: 'per_asc' | 'pbr_asc' | 'roe_desc' | 'div_yield_desc' | 'mktcap_desc'
+  sort?: 'per_asc' | 'pbr_asc' | 'roe_desc' | 'div_yield_desc' | 'mktcap_desc' | 'ev_ebitda_asc'
   page?: number
 }
 
@@ -30,6 +32,8 @@ export interface ScreenRow {
   divYield: number | null
   eqAr: number | null   // decimal (0–1); multiply by 100 to get %
   psr: number | null
+  evEbitda: number | null
+  netCashRatio: number | null
 }
 
 export const PAGE_SIZE = 50
@@ -40,6 +44,7 @@ const ORDER_MAP: Record<string, string> = {
   roe_desc:       'roe DESC NULLS LAST',
   div_yield_desc: 'div_yield DESC NULLS LAST',
   mktcap_desc:    'mktcap DESC NULLS LAST',
+  ev_ebitda_asc:  'ev_ebitda ASC NULLS LAST',
 }
 
 export async function screenStocks(
@@ -57,11 +62,13 @@ export async function screenStocks(
     if (max != null) conds.push(sql`${c} <= ${max}`)
   }
 
-  addRange('per',       filters.perMin,      filters.perMax)
-  addRange('pbr',       filters.pbrMin,      filters.pbrMax)
-  addRange('roe',       filters.roeMin,      filters.roeMax)
-  addRange('div_yield', filters.divYieldMin, filters.divYieldMax)
-  addRange('psr',       filters.psrMin,      filters.psrMax)
+  addRange('per',            filters.perMin,          filters.perMax)
+  addRange('pbr',            filters.pbrMin,          filters.pbrMax)
+  addRange('roe',            filters.roeMin,          filters.roeMax)
+  addRange('div_yield',      filters.divYieldMin,     filters.divYieldMax)
+  addRange('psr',            filters.psrMin,          filters.psrMax)
+  addRange('ev_ebitda',      filters.evEbitdaMin,     filters.evEbitdaMax)
+  addRange('net_cash_ratio', filters.netCashRatioMin, filters.netCashRatioMax)
 
   // eq_ar stored as decimal (0–1); convert user-input % to decimal
   if (filters.eqArMin != null) conds.push(sql`eq_ar >= ${filters.eqArMin / 100}`)
@@ -103,9 +110,20 @@ export async function screenStocks(
         div_ann::float,
         sales::float,
         sh_out_fy::float,
-        cfo::float
+        cfo::float,
+        op::float,
+        cash_eq::float
       FROM financial_summary
       WHERE cur_per_type = 'FY'
+      ORDER BY code, disc_date DESC
+    ),
+    latest_details AS (
+      SELECT DISTINCT ON (code)
+        code,
+        COALESCE(debt_current::float, 0) AS debt_current,
+        COALESCE(debt_non_curr::float, 0) AS debt_non_curr,
+        dna::float
+      FROM fins_details
       ORDER BY code, disc_date DESC
     ),
     computed AS (
@@ -139,10 +157,26 @@ export async function screenStocks(
           ELSE NULL END AS psr,
         CASE WHEN f.sh_out_fy > 0
           THEN p.close * f.sh_out_fy
-          ELSE NULL END AS mktcap
+          ELSE NULL END AS mktcap,
+        -- EV/EBITDA（fins_details が必要）
+        CASE WHEN d.dna IS NOT NULL AND f.op IS NOT NULL AND (f.op + d.dna) > 0
+              AND f.sh_out_fy > 0 AND f.cash_eq IS NOT NULL
+          THEN ROUND((
+            (p.close * f.sh_out_fy - (f.cash_eq - d.debt_current - d.debt_non_curr))
+            / (f.op + d.dna)
+          )::numeric, 1)::float
+          ELSE NULL END AS ev_ebitda,
+        -- ネットキャッシュ比率 = (CashEq - 有利子負債) / 時価総額
+        CASE WHEN f.cash_eq IS NOT NULL AND f.sh_out_fy > 0 AND p.close * f.sh_out_fy > 0
+          THEN ROUND((
+            (f.cash_eq - d.debt_current - d.debt_non_curr)
+            / (p.close * f.sh_out_fy)
+          )::numeric, 2)::float
+          ELSE NULL END AS net_cash_ratio
       FROM stock_master sm
-      JOIN latest_price p ON p.code = sm.code
-      JOIN latest_fin   f ON f.code = sm.code
+      JOIN latest_price   p ON p.code = sm.code
+      JOIN latest_fin     f ON f.code = sm.code
+      LEFT JOIN latest_details d ON d.code = sm.code
     )
     SELECT *, COUNT(*) OVER() AS total_count
     FROM computed
@@ -154,19 +188,21 @@ export async function screenStocks(
   const rawRows = result.rows as Record<string, unknown>[]
 
   const rows: ScreenRow[] = rawRows.map(r => ({
-    code:       String(r.code      ?? ''),
-    coName:     String(r.co_name   ?? ''),
-    sector17Nm: String(r.sector17_nm ?? ''),
-    mktNm:      String(r.mkt_nm    ?? ''),
-    scaleCat:   String(r.scale_cat ?? ''),
-    mrgnNm:     String(r.mrgn_nm   ?? ''),
-    close:      r.close     != null ? Number(r.close)     : null,
-    per:        r.per       != null ? Number(r.per)       : null,
-    pbr:        r.pbr       != null ? Number(r.pbr)       : null,
-    roe:        r.roe       != null ? Number(r.roe)       : null,
-    divYield:   r.div_yield != null ? Number(r.div_yield) : null,
-    eqAr:       r.eq_ar     != null ? Number(r.eq_ar)     : null,
-    psr:        r.psr       != null ? Number(r.psr)       : null,
+    code:         String(r.code        ?? ''),
+    coName:       String(r.co_name     ?? ''),
+    sector17Nm:   String(r.sector17_nm ?? ''),
+    mktNm:        String(r.mkt_nm      ?? ''),
+    scaleCat:     String(r.scale_cat   ?? ''),
+    mrgnNm:       String(r.mrgn_nm     ?? ''),
+    close:        r.close          != null ? Number(r.close)          : null,
+    per:          r.per            != null ? Number(r.per)            : null,
+    pbr:          r.pbr            != null ? Number(r.pbr)            : null,
+    roe:          r.roe            != null ? Number(r.roe)            : null,
+    divYield:     r.div_yield      != null ? Number(r.div_yield)      : null,
+    eqAr:         r.eq_ar          != null ? Number(r.eq_ar)          : null,
+    psr:          r.psr            != null ? Number(r.psr)            : null,
+    evEbitda:     r.ev_ebitda      != null ? Number(r.ev_ebitda)      : null,
+    netCashRatio: r.net_cash_ratio != null ? Number(r.net_cash_ratio) : null,
   }))
 
   const total = rawRows.length > 0 ? Number(rawRows[0].total_count ?? 0) : 0

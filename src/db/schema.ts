@@ -66,3 +66,20 @@ export const financialSummary = pgTable('financial_summary', {
 }, (t) => [
   primaryKey({ columns: [t.code, t.discNo] }),
 ])
+
+// 詳細財務情報 — /v2/fins/details（高度指標: EV/EBITDA, ROIC, ネットキャッシュ）
+export const finsDetails = pgTable('fins_details', {
+  code:         varchar('code', { length: 5 }).notNull(),
+  discNo:       text('disc_no').notNull(),       // DisclosureNumber
+  discDate:     date('disc_date'),
+  docType:      text('doc_type'),
+  curPerType:   text('cur_per_type'),
+  debtCurrent:  numeric('debt_current'),         // 有利子負債_流動
+  debtNonCurr:  numeric('debt_non_curr'),        // 有利子負債_非流動
+  dna:          numeric('dna'),                  // 減価償却費・償却費（D&A）
+  pretaxProfit: numeric('pretax_profit'),        // 税引前利益
+  taxExpense:   numeric('tax_expense'),          // 法人税等
+}, (t) => [
+  primaryKey({ columns: [t.code, t.discNo] }),
+  index('idx_fins_details_disc_date').on(t.discDate),
+])

@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm'
 import type { Db } from '../db/client'
-import { financialSummary } from '../db/schema'
+import { financialSummary, finsDetails } from '../db/schema'
 
 export type FinancialRow = Awaited<ReturnType<typeof getLatestFinancials>>[number]
 
@@ -93,5 +93,100 @@ export function fmtVolume(s: string | null | undefined): string {
   return `${Math.round(n / 1000).toLocaleString()}`
 }
 
+function round0(n: number) { return Math.round(n) }
 function round1(n: number) { return Math.round(n * 10) / 10 }
 function round2(n: number) { return Math.round(n * 100) / 100 }
+
+// ── 高度財務指標（fins_details が必要）───────────────────────────────────────
+
+export type FinsDetailRow = Awaited<ReturnType<typeof getFinsDetailsLatest>>
+
+// 最新の fins_details レコードを返す（なければ null）
+export async function getFinsDetailsLatest(db: Db, code5: string) {
+  const rows = await db
+    .select()
+    .from(finsDetails)
+    .where(eq(finsDetails.code, code5))
+    .orderBy(desc(finsDetails.discDate))
+    .limit(1)
+  return rows[0] ?? null
+}
+
+export interface AdvancedMetrics {
+  mktCap:       number | null   // 時価総額（円）
+  netCash:      number | null   // ネットキャッシュ = CashEq - 有利子負債合計
+  netCashRatio: number | null   // ネットキャッシュ比率 = netCash / mktCap
+  ev:           number | null   // EV = 時価総額 - ネットキャッシュ
+  ebitda:       number | null   // EBITDA = OP + D&A
+  evEbitda:     number | null   // EV/EBITDA（倍）
+  roic:         number | null   // ROIC（%）
+  nopat:        number | null   // NOPAT = OP × (1 - 実効税率)
+  investedCap:  number | null   // 投下資本 = Eq + 有利子負債 - CashEq
+}
+
+export function calcAdvancedMetrics(
+  latestClose: number | null,
+  fy: FinancialRow | null,
+  detail: FinsDetailRow | null,
+): AdvancedMetrics {
+  const empty: AdvancedMetrics = {
+    mktCap: null, netCash: null, netCashRatio: null,
+    ev: null, ebitda: null, evEbitda: null,
+    roic: null, nopat: null, investedCap: null,
+  }
+  if (!fy || latestClose === null) return empty
+
+  const shOut  = parseNum(fy.shOutFy)
+  const cashEq = parseNum(fy.cashEq)
+  const op     = parseNum(fy.op)
+  const equity = parseNum(fy.equity)
+
+  const debtCurrent  = detail ? parseNum(detail.debtCurrent)  : null
+  const debtNonCurr  = detail ? parseNum(detail.debtNonCurr)  : null
+  const dna          = detail ? parseNum(detail.dna)          : null
+  const pretaxProfit = detail ? parseNum(detail.pretaxProfit) : null
+  const taxExpense   = detail ? parseNum(detail.taxExpense)   : null
+
+  // 時価総額
+  const mktCap = shOut !== null ? round0(latestClose * shOut) : null
+
+  // 有利子負債合計・ネットキャッシュ
+  const totalDebt = (debtCurrent ?? 0) + (debtNonCurr ?? 0)
+  const netCash = cashEq !== null ? round0(cashEq - totalDebt) : null
+
+  // ネットキャッシュ比率
+  const netCashRatio = netCash !== null && mktCap !== null && mktCap > 0
+    ? round2(netCash / mktCap)
+    : null
+
+  // EV = 時価総額 − ネットキャッシュ
+  const ev = mktCap !== null && netCash !== null ? round0(mktCap - netCash) : null
+
+  // EBITDA = OP + D&A（D&A が不明な場合は null）
+  const ebitda = op !== null && dna !== null ? round0(op + dna) : null
+
+  // EV/EBITDA
+  const evEbitda = ev !== null && ebitda !== null && ebitda > 0
+    ? round1(ev / ebitda)
+    : null
+
+  // 実効税率（データなし時は 30% を仮定）
+  const taxRate = pretaxProfit !== null && pretaxProfit > 0 && taxExpense !== null
+    ? taxExpense / pretaxProfit
+    : 0.30
+
+  // NOPAT = OP × (1 - 実効税率)
+  const nopat = op !== null ? round0(op * (1 - taxRate)) : null
+
+  // 投下資本 = Eq + 有利子負債 - CashEq
+  const investedCap = equity !== null && cashEq !== null
+    ? round0(equity + totalDebt - cashEq)
+    : null
+
+  // ROIC = NOPAT / 投下資本 × 100
+  const roic = nopat !== null && investedCap !== null && investedCap > 0
+    ? round1((nopat / investedCap) * 100)
+    : null
+
+  return { mktCap, netCash, netCashRatio, ev, ebitda, evEbitda, roic, nopat, investedCap }
+}

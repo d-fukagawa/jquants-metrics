@@ -3,7 +3,7 @@ import type { Bindings } from '../types'
 import { createDb } from '../db/client'
 import { getStockByCode } from '../services/stockService'
 import { getRecentPrices } from '../services/priceService'
-import { getLatestFinancials, calcMetrics, fmtJpy, fmtVolume } from '../services/financialService'
+import { getLatestFinancials, calcMetrics, fmtJpy, fmtVolume, getFinsDetailsLatest, calcAdvancedMetrics } from '../services/financialService'
 import { PriceChart } from '../components/PriceChart'
 import { MetricsCard } from '../components/MetricsCard'
 
@@ -17,10 +17,11 @@ stockRoute.get('/:code', async (c) => {
   const code5 = code4 + '0'
   const db    = createDb(c.env.DATABASE_URL)
 
-  const [stock, prices, financials] = await Promise.all([
+  const [stock, prices, financials, finsDetail] = await Promise.all([
     getStockByCode(db, code5),
     getRecentPrices(db, code5, 60),
     getLatestFinancials(db, code5),
+    getFinsDetailsLatest(db, code5),
   ])
 
   if (!stock) {
@@ -38,8 +39,9 @@ stockRoute.get('/:code', async (c) => {
   const pricePct    = priceChange !== null && prevClose ? (priceChange / prevClose) * 100 : null
   const isUp        = priceChange !== null && priceChange >= 0
 
-  const metrics   = calcMetrics(latestClose, financials)
-  const fy        = financials.find(f => f.curPerType === 'FY') ?? financials[0] ?? null
+  const metrics    = calcMetrics(latestClose, financials)
+  const fy         = financials.find(f => f.curPerType === 'FY') ?? financials[0] ?? null
+  const advMetrics = calcAdvancedMetrics(latestClose, fy, finsDetail)
   const recentPrices = prices.slice(0, 10)
 
   return c.render(
@@ -144,6 +146,40 @@ stockRoute.get('/:code', async (c) => {
           ソース: /v2/equities/bars/daily · 調整後価格（権利落ち・株式分割考慮）
         </div>
       </div>
+
+      {/* 高度財務指標（Phase 3）*/}
+      {(advMetrics.evEbitda !== null || advMetrics.roic !== null || advMetrics.netCash !== null) && (
+        <>
+          <div class="section-title">高度財務指標（EV/EBITDA・ROIC・ネットキャッシュ）</div>
+          <div class="fin-grid">
+            <div class="card card-body">
+              <div class="fin-block-title">企業価値（EV）</div>
+              <div class="fin-row"><span class="fin-key">時価総額</span><span class="fin-val">{advMetrics.mktCap !== null ? fmtJpy(String(advMetrics.mktCap)) : '—'}</span></div>
+              <div class="fin-row">
+                <span class="fin-key">ネットキャッシュ</span>
+                <span class={`fin-val ${(advMetrics.netCash ?? 0) >= 0 ? 'positive' : 'negative'}`}>
+                  {advMetrics.netCash !== null ? fmtJpy(String(advMetrics.netCash)) : '—'}
+                </span>
+              </div>
+              <div class="fin-row"><span class="fin-key">NC比率（NC/時価総額）</span><span class="fin-val">{advMetrics.netCashRatio !== null ? `${advMetrics.netCashRatio}x` : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">EV</span><span class="fin-val">{advMetrics.ev !== null ? fmtJpy(String(advMetrics.ev)) : '—'}</span></div>
+            </div>
+            <div class="card card-body">
+              <div class="fin-block-title">EV/EBITDA・ROIC</div>
+              <div class="fin-row"><span class="fin-key">EBITDA</span><span class="fin-val">{advMetrics.ebitda !== null ? fmtJpy(String(advMetrics.ebitda)) : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">EV/EBITDA</span><span class="fin-val">{advMetrics.evEbitda !== null ? `${advMetrics.evEbitda}x` : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">NOPAT</span><span class="fin-val">{advMetrics.nopat !== null ? fmtJpy(String(advMetrics.nopat)) : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">投下資本</span><span class="fin-val">{advMetrics.investedCap !== null ? fmtJpy(String(advMetrics.investedCap)) : '—'}</span></div>
+              <div class="fin-row">
+                <span class="fin-key">ROIC</span>
+                <span class={`fin-val ${(advMetrics.roic ?? 0) >= 0 ? 'positive' : 'negative'}`}>
+                  {advMetrics.roic !== null ? `${advMetrics.roic}%` : '—'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* 財務サマリー */}
       {fy && (

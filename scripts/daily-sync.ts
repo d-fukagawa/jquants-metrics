@@ -55,4 +55,4 @@ console.log(`[sync] start  from=${from} to=${to}`)
 const db = createDb(databaseUrl)
 const result = await syncAllStocks(db, apiKey, from, to)
 
-console.log(`[sync] done  master=${result.masterCount}  prices=${result.priceCount}  fins=${result.finCount}`)
+console.log(`[sync] done  master=${result.masterCount}  prices=${result.priceCount}  fins=${result.finCount}  finsDetails=${result.finDetailsCount}`)
