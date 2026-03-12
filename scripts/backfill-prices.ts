@@ -86,12 +86,18 @@ async function runWithRetry<T>(fn: () => Promise<T>, retries: number): Promise<T
 
 const includeWeekends = (process.env.INCLUDE_WEEKENDS ?? 'false').toLowerCase() === 'true'
 const retryPerDate = Number(process.env.RETRY_PER_DATE ?? '3')
+const envOrUndef = (name: string): string | undefined => {
+  const v = process.env[name]
+  if (v == null) return undefined
+  const t = v.trim()
+  return t === '' ? undefined : t
+}
 
 const now = new Date()
 const defaultTo = fmtYmd(addDays(now, -1))
 const defaultFrom = fmtYmd(addDays(now, -180))
-const from = process.env.BACKFILL_FROM ?? defaultFrom
-const to = process.env.BACKFILL_TO ?? defaultTo
+const from = envOrUndef('BACKFILL_FROM') ?? defaultFrom
+const to = envOrUndef('BACKFILL_TO') ?? defaultTo
 
 if (from > to) {
   console.error(`ERROR: BACKFILL_FROM (${from}) must be <= BACKFILL_TO (${to})`)
@@ -120,4 +126,3 @@ for (const date of dates) {
 }
 
 console.log(`[backfill] done dates=${dates.length} nonEmptyDates=${nonEmptyDates} totalRows=${totalRows}`)
-

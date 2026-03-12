@@ -16,6 +16,12 @@ import { syncAllStocks } from '../src/services/syncService'
 
 const databaseUrl = process.env.DATABASE_URL
 const apiKey      = process.env.JQUANTS_API_KEY
+const envOrUndef = (name: string): string | undefined => {
+  const v = process.env[name]
+  if (v == null) return undefined
+  const t = v.trim()
+  return t === '' ? undefined : t
+}
 
 if (!databaseUrl || !apiKey) {
   console.error('ERROR: DATABASE_URL and JQUANTS_API_KEY are required')
@@ -41,8 +47,8 @@ function todayJst(): string {
 }
 
 const defaultDate = todayJst()
-const from = process.env.SYNC_FROM ?? defaultDate
-const to   = process.env.SYNC_TO   ?? defaultDate
+const from = envOrUndef('SYNC_FROM') ?? defaultDate
+const to   = envOrUndef('SYNC_TO')   ?? defaultDate
 
 console.log(`[sync] start  from=${from} to=${to}`)
 
