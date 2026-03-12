@@ -1,6 +1,6 @@
 # jquants-metrics TODO
 
-最終更新: 2026-02-21
+最終更新: 2026-03-12
 
 ---
 
@@ -104,18 +104,29 @@
 - [x] `src/index.tsx` — `/screen` ルートをマウント
 - [x] `src/services/screenService.test.ts` + `src/routes/screen.test.tsx`
 
-### Step 12: 自動同期 Cron ハンドラー ✅
+### Step 12: 自動同期（GitHub Actions） ✅
 
-> **前提**: JQuants API 有料プランが必要。
+> **前提**: JQuants API 有料プランが必要（Light プラン以上を推奨）。
 > 無料プランのデータ範囲は 〜2025-11-29 で終了しており、2026-03-11 以降の最新データは有料プランでのみ取得可能。
 
-- [x] `src/services/syncService.ts` に `syncAllStocks(db, apiKey, from, to)` 追加
-  - 銘柄マスタ更新 → 全銘柄の株価・財務をループ同期
-  - レート制限（5 req/min）対応: 各 API 呼び出し後に `await sleep(200)`
-- [x] `src/index.tsx` に `scheduled` ハンドラー追加（直近7日間を同期）
-  - エクスポート形式を `export default { fetch, scheduled }` に変更
-- [x] Cloudflare Pages の Cron は `wrangler.jsonc` 非対応 → コメントで手順を明記
-  - ダッシュボード: Pages > Settings > Functions > Cron Triggers > `0 1 * * *`
+- [x] **Cloudflare Pages は Cron 非対応** → GitHub Actions で代替
+  - `wrangler.jsonc` コメントに手順を明記
+- [x] `scripts/daily-sync.ts` 作成 — Node.js + tsx で直接実行するエントリポイント
+  - `DATABASE_URL` / `JQUANTS_API_KEY` / `SYNC_FROM` / `SYNC_TO` 環境変数を受け取る
+- [x] `.github/workflows/daily-sync.yml` 作成
+  - `cron: '0 7 * * 1-5'`（平日 07:00 UTC = 16:00 JST、東証クローズ後）
+  - `workflow_dispatch` で `from` / `to` を指定した手動実行も可能
+  - タイムアウト: 180 分
+- [x] `src/services/syncService.ts` — `syncAllStocks` 実装
+  - 株価: **日付バルク取得**（`syncDailyPricesAll`）= 1日1リクエストで全銘柄分
+  - 財務: 銘柄ごとに取得（~4400 リクエスト）
+  - Light プラン（60 req/min）対応: `sleep(1000ms)` で ~50 req/min に制限
+  - 各フェーズのログ出力（master / prices / financials 進捗）
+- [x] `src/jquants/client.ts` — 429 レートリミット対策
+  - `fetchDailyPricesAll(apiKey, date)` 追加（date のみ指定で全銘柄一括）
+  - 429 時に 60 秒待機して最大 3 回リトライ
+- [x] GitHub Secrets に `DATABASE_URL` / `JQUANTS_API_KEY` を設定
+- [x] 手動実行（`workflow_dispatch`）で同期成功確認
 
 ---
 
@@ -145,6 +156,18 @@
 | `/v2/equities/master` | `"data"` | — |
 | `/v2/equities/bars/daily` | `"data"` | — |
 | `/v2/fins/summary` | `"data"` | `DiscNo`（旧 DisclosureNumber）、`DiscDate`（旧 DisclosureDate）、`TA`（旧 TotalAssets） |
+
+### JQuants API レートリミット（2026-03 実測）
+
+| プラン | 上限 | 必要な sleep | 4400 銘柄財務の所要時間 |
+|--------|------|------------|----------------------|
+| Free | 5 req/min | 12000ms | — |
+| Light | 60 req/min | 1000ms | ~88 分 |
+| Standard | 120 req/min | 500ms | ~44 分 |
+| Premium | 500 req/min | 120ms | ~11 分 |
+
+- 大幅超過で 5 分間アクセス遮断あり → 429 時は 60 秒待機してリトライ
+- `/v2/equities/bars/daily?date=YYYY-MM-DD`（code なし）で**全銘柄の日足を 1 リクエスト**で取得可能（Light プラン以上で確認済み）
 
 ### その他
 
