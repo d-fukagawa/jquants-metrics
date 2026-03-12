@@ -53,6 +53,8 @@ jobs:
       - run: npm ci
 
       - name: EDINET watch sync (daily)
+        id: sync
+        shell: bash
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           EDINETDB_API_KEY: ${{ secrets.EDINETDB_API_KEY }}
@@ -62,7 +64,32 @@ jobs:
           MAX_DEEP_DIVE_DAILY: ${{ inputs.max_deep_dive_daily || '8' }}
           TIMELINE_LOOKBACK_DAYS: ${{ inputs.timeline_lookback_days || '2' }}
           SLEEP_MS: ${{ inputs.sleep_ms || '700' }}
-        run: npx tsx scripts/edinet-watch-sync.ts
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/edinet-watch-sync.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          if grep -Eq '(^|[^0-9])429([^0-9]|$)|Too Many Requests' sync.log; then
+            rate_limited=true
+          else
+            rate_limited=false
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$rate_limited" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RATE_LIMITED: ${{ steps.sync.outputs.rate_limited }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1
 
   weekly:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'weekly' || github.event_name == 'schedule' && github.event.schedule == '0 12 * * 0' }}
@@ -79,6 +106,8 @@ jobs:
       - run: npm ci
 
       - name: EDINET watch sync (weekly)
+        id: sync
+        shell: bash
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           EDINETDB_API_KEY: ${{ secrets.EDINETDB_API_KEY }}
@@ -86,5 +115,29 @@ jobs:
           WATCHLIST_BOOTSTRAP_CODES: ${{ inputs.watchlist_bootstrap_codes || '5592,212A,402A,5713,5016,5253,5843,5401,9503,5802,6227,485A' }}
           MAX_CODES_WEEKLY: ${{ inputs.max_codes_weekly || '40' }}
           SLEEP_MS: ${{ inputs.sleep_ms || '700' }}
-        run: npx tsx scripts/edinet-watch-sync.ts
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/edinet-watch-sync.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          if grep -Eq '(^|[^0-9])429([^0-9]|$)|Too Many Requests' sync.log; then
+            rate_limited=true
+          else
+            rate_limited=false
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$rate_limited" >> "$GITHUB_OUTPUT"
+          exit 0
 
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RATE_LIMITED: ${{ steps.sync.outputs.rate_limited }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1

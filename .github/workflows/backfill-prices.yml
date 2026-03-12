@@ -37,6 +37,8 @@ jobs:
       - run: npm ci
 
       - name: 過去日次株価バックフィル（全銘柄）
+        id: sync
+        shell: bash
         env:
           DATABASE_URL:     ${{ secrets.DATABASE_URL }}
           JQUANTS_API_KEY:  ${{ secrets.JQUANTS_API_KEY }}
@@ -44,7 +46,32 @@ jobs:
           BACKFILL_TO:      ${{ inputs.to }}
           INCLUDE_WEEKENDS: ${{ inputs.include_weekends }}
           RETRY_PER_DATE:   ${{ inputs.retry_per_date }}
-        run: npx tsx scripts/backfill-prices.ts
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/backfill-prices.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          if grep -Eq '(^|[^0-9])429([^0-9]|$)|Too Many Requests' sync.log; then
+            rate_limited=true
+          else
+            rate_limited=false
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$rate_limited" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RATE_LIMITED: ${{ steps.sync.outputs.rate_limited }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1
 
   backfill-prices-scheduled:
     if: ${{ github.event_name == 'schedule' }}
@@ -61,10 +88,37 @@ jobs:
       - run: npm ci
 
       - name: 直近30日 株価バックフィル（定期）
+        id: sync
+        shell: bash
         env:
           DATABASE_URL:     ${{ secrets.DATABASE_URL }}
           JQUANTS_API_KEY:  ${{ secrets.JQUANTS_API_KEY }}
           BACKFILL_DAYS:    '30'
           INCLUDE_WEEKENDS: 'false'
           RETRY_PER_DATE:   '3'
-        run: npx tsx scripts/backfill-prices.ts
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/backfill-prices.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          if grep -Eq '(^|[^0-9])429([^0-9]|$)|Too Many Requests' sync.log; then
+            rate_limited=true
+          else
+            rate_limited=false
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$rate_limited" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RATE_LIMITED: ${{ steps.sync.outputs.rate_limited }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1

@@ -29,9 +29,36 @@ jobs:
       - run: npm ci
 
       - name: 全銘柄 株価同期
+        id: sync
+        shell: bash
         env:
           DATABASE_URL:    ${{ secrets.DATABASE_URL }}
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           SYNC_FROM:       ${{ inputs.from }}
           SYNC_TO:         ${{ inputs.to }}
-        run: npx tsx scripts/daily-prices-sync.ts
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/daily-prices-sync.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          if grep -Eq '(^|[^0-9])429([^0-9]|$)|Too Many Requests' sync.log; then
+            rate_limited=true
+          else
+            rate_limited=false
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$rate_limited" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RATE_LIMITED: ${{ steps.sync.outputs.rate_limited }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1
