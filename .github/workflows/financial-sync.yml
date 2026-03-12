@@ -1,0 +1,49 @@
+name: Financial Data Sync
+
+on:
+  schedule:
+    # 毎週日曜 09:30 UTC（日本時間 18:30）に実行
+    - cron: '30 9 * * 0'
+  workflow_dispatch:
+    inputs:
+      shard:
+        description: 'シャード番号（0始まり）'
+        required: false
+        default: '0'
+      shards:
+        description: '総シャード数'
+        required: false
+        default: '1'
+      sleep_ms:
+        description: '銘柄ごとの待機ms'
+        required: false
+        default: '1000'
+      retry_per_code:
+        description: '銘柄ごとのリトライ回数'
+        required: false
+        default: '2'
+
+jobs:
+  sync-financials:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: financial_summary / fins_details 同期
+        env:
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          SHARD:           ${{ inputs.shard }}
+          SHARDS:          ${{ inputs.shards }}
+          SLEEP_MS:        ${{ inputs.sleep_ms }}
+          RETRY_PER_CODE:  ${{ inputs.retry_per_code }}
+        run: npx tsx scripts/backfill-financials.ts
+

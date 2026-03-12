@@ -30,8 +30,15 @@ describe('GET /sync-status', () => {
       financialCodeCount: 4160,
       financialLatestDiscDate: '2026-02-14',
       financialLatestDiscDateCount: 4100,
+      finsDetailsTotalCount: 600000,
+      finsDetailsCodeCount: 3600,
+      finsDetailsDnaCount: 2800,
+      finsDetailsLatestDiscDate: '2026-02-14',
+      finsDetailsLatestDiscDateCount: 3000,
       missingPriceOnLatest: 10,
       financialCoveragePct: 99.0,
+      finsDetailsCoveragePct: 85.7,
+      evEbitdaReadyCount: 2500,
     })
 
     const res = await get('/')
@@ -41,6 +48,8 @@ describe('GET /sync-status', () => {
     expect(html).toContain('4,200')
     expect(html).toContain('2026-03-11')
     expect(html).toContain('99.0%')
+    expect(html).toContain('85.7%')
+    expect(html).toContain('2,500')
   })
 
   it('renders 未同期 when no data', async () => {
@@ -55,12 +64,18 @@ describe('GET /sync-status', () => {
       financialCodeCount: 0,
       financialLatestDiscDate: null,
       financialLatestDiscDateCount: 0,
+      finsDetailsTotalCount: 0,
+      finsDetailsCodeCount: 0,
+      finsDetailsDnaCount: 0,
+      finsDetailsLatestDiscDate: null,
+      finsDetailsLatestDiscDateCount: 0,
       missingPriceOnLatest: null,
       financialCoveragePct: null,
+      finsDetailsCoveragePct: null,
+      evEbitdaReadyCount: 0,
     })
 
     const html = await (await get('/')).text()
     expect(html).toContain('未同期')
   })
 })
-

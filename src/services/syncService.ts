@@ -22,9 +22,28 @@ function firstMatch(stmt: Record<string, string>, keys: readonly string[]): stri
 }
 
 const KEYS = {
-  debtCurrent:  ['Bonds and borrowings - CL (IFRS)', 'Borrowings - CL (IFRS)', 'Short-term borrowings', 'Short-term loans payable'],
-  debtNonCurr:  ['Bonds and borrowings - NCL (IFRS)', 'Borrowings - NCL (IFRS)', 'Long-term borrowings', 'Long-term loans payable'],
-  dna:          ['Depreciation and amortization - OpeCF (IFRS)', 'Depreciation and amortization', 'DepreciationAndAmortization'],
+  debtCurrent:  [
+    'Bonds and borrowings - CL (IFRS)',
+    'Borrowings - CL (IFRS)',
+    'Short-term borrowings',
+    'Short-term loans payable',
+    'Current portion of bonds and borrowings',
+  ],
+  debtNonCurr:  [
+    'Bonds and borrowings - NCL (IFRS)',
+    'Borrowings - NCL (IFRS)',
+    'Long-term borrowings',
+    'Long-term loans payable',
+    'Non-current bonds and borrowings',
+  ],
+  dna:          [
+    'Depreciation and amortization - OpeCF (IFRS)',
+    'Depreciation and amortization',
+    'DepreciationAndAmortization',
+    'Depreciation',
+    'Amortization',
+    'Depreciation and amortization expense',
+  ],
   pretaxProfit: ['Profit (loss) before tax from continuing operations (IFRS)', 'Profit before tax', 'PBT', 'IncomeBeforeIncomeTaxes'],
   taxExpense:   ['Income tax expense (IFRS)', 'Income taxes', 'Tax expense', 'IncomeTaxes'],
 } as const

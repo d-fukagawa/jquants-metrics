@@ -47,6 +47,18 @@ syncStatusRoute.get('/', async (c) => {
           </div>
           <div class="metric-sub">0 に近いほど同期完了</div>
         </div>
+        <div class="metric-card">
+          <div class="metric-label">fins_details カバレッジ</div>
+          <div class="metric-value">
+            {s.finsDetailsCoveragePct != null ? `${s.finsDetailsCoveragePct.toFixed(1)}%` : '未同期'}
+          </div>
+          <div class="metric-sub">銘柄数: {fmtNum(s.finsDetailsCodeCount)} / {fmtNum(s.masterCount)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">EV/EBITDA 算出可能銘柄</div>
+          <div class="metric-value">{fmtNum(s.evEbitdaReadyCount)}</div>
+          <div class="metric-sub">fins_details と FY 財務が揃う銘柄</div>
+        </div>
       </section>
 
       <section class="card">
@@ -85,10 +97,16 @@ syncStatusRoute.get('/', async (c) => {
               <td>{fmtNum(s.financialLatestDiscDateCount)}</td>
               <td>銘柄数: {fmtNum(s.financialCodeCount)}</td>
             </tr>
+            <tr>
+              <td>fins_details</td>
+              <td>{fmtNum(s.finsDetailsTotalCount)}</td>
+              <td>{s.finsDetailsLatestDiscDate ?? '未同期'}</td>
+              <td>{fmtNum(s.finsDetailsLatestDiscDateCount)}</td>
+              <td>銘柄数: {fmtNum(s.finsDetailsCodeCount)} / DNAあり: {fmtNum(s.finsDetailsDnaCount)}</td>
+            </tr>
           </tbody>
         </table>
       </section>
     </div>,
   )
 })
-

@@ -169,17 +169,17 @@ gh workflow run backfill-prices.yml --ref main -f from=2025-08-01 -f to=2025-08-
 - 特に `fins_details.dna`（減価償却費）や負債項目欠損で `EV/EBITDA` が null になる
 
 計画:
-- [ ] `sync-status` に高度指標向けのカバレッジ指標を追加
+- [x] `sync-status` に高度指標向けのカバレッジ指標を追加
   - `fins_details` 総件数 / 銘柄カバレッジ
   - `dna IS NOT NULL` 件数
   - `EV/EBITDA` 算出可能銘柄数
-- [ ] GitHub Actions を「日次株価」と「財務系」に分離
+- [x] GitHub Actions を「日次株価」と「財務系」に分離
   - `daily-sync.yml` は価格中心（平日18:00 JST）
   - `financial sync` は別 workflow（週次または手動）
-- [ ] `financial_summary + fins_details` のバックフィル workflow を追加
+- [x] `financial_summary + fins_details` のバックフィル workflow を追加
   - `workflow_dispatch` で手動実行
   - `shard/shards` を入力可能にして分割実行
-- [ ] `fins_details` 取得ロジックの補強
+- [x] `fins_details` 取得ロジックの補強
   - `dna` の取得キー候補を追加し、取得率改善
   - `latest_details` 抽出を「最新1件」から「必要項目が非NULLの最新優先」へ改善
 - [ ] 実行と検証

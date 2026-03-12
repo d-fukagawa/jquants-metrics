@@ -12,6 +12,9 @@ describe('getSyncStatusSummary', () => {
       .mockResolvedValueOnce({ rows: [{ latest_count: 4190 }] })
       .mockResolvedValueOnce({ rows: [{ total_count: 820000, code_count: 4160, latest_disc_date: '2026-02-14' }] })
       .mockResolvedValueOnce({ rows: [{ latest_count: 4100 }] })
+      .mockResolvedValueOnce({ rows: [{ total_count: 600000, code_count: 3600, dna_count: 2800, latest_disc_date: '2026-02-14' }] })
+      .mockResolvedValueOnce({ rows: [{ latest_count: 3000 }] })
+      .mockResolvedValueOnce({ rows: [{ ready_count: 2500 }] })
 
     const db = { execute } as unknown as Db
     const s = await getSyncStatusSummary(db)
@@ -22,6 +25,10 @@ describe('getSyncStatusSummary', () => {
     expect(s.missingPriceOnLatest).toBe(10)
     expect(s.financialCodeCount).toBe(4160)
     expect(s.financialCoveragePct).toBe(99)
+    expect(s.finsDetailsCodeCount).toBe(3600)
+    expect(s.finsDetailsDnaCount).toBe(2800)
+    expect(s.finsDetailsCoveragePct).toBe(85.7)
+    expect(s.evEbitdaReadyCount).toBe(2500)
   })
 
   it('handles empty tables', async () => {
@@ -31,6 +38,9 @@ describe('getSyncStatusSummary', () => {
       .mockResolvedValueOnce({ rows: [{ latest_count: 0 }] })
       .mockResolvedValueOnce({ rows: [{ total_count: 0, code_count: 0, latest_disc_date: null }] })
       .mockResolvedValueOnce({ rows: [{ latest_count: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ total_count: 0, code_count: 0, dna_count: 0, latest_disc_date: null }] })
+      .mockResolvedValueOnce({ rows: [{ latest_count: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ ready_count: 0 }] })
 
     const db = { execute } as unknown as Db
     const s = await getSyncStatusSummary(db)
@@ -39,6 +49,7 @@ describe('getSyncStatusSummary', () => {
     expect(s.priceLatestDate).toBeNull()
     expect(s.missingPriceOnLatest).toBeNull()
     expect(s.financialCoveragePct).toBeNull()
+    expect(s.finsDetailsCoveragePct).toBeNull()
+    expect(s.evEbitdaReadyCount).toBe(0)
   })
 })
-

@@ -124,7 +124,7 @@ export async function screenStocks(
         COALESCE(debt_non_curr::float, 0) AS debt_non_curr,
         dna::float
       FROM fins_details
-      ORDER BY code, disc_date DESC
+      ORDER BY code, (dna IS NOT NULL) DESC, disc_date DESC
     ),
     computed AS (
       SELECT

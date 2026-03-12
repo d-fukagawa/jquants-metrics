@@ -1,4 +1,4 @@
-name: Daily Data Sync
+name: Daily Price Sync
 
 on:
   schedule:
@@ -15,9 +15,9 @@ on:
         required: false
 
 jobs:
-  sync:
+  sync-prices:
     runs-on: ubuntu-latest
-    timeout-minutes: 180  # 最大 3 時間（4,400 銘柄 × 400ms ≒ 30 分）
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -28,10 +28,10 @@ jobs:
 
       - run: npm ci
 
-      - name: 全銘柄データ同期
+      - name: 全銘柄 株価同期
         env:
           DATABASE_URL:    ${{ secrets.DATABASE_URL }}
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
           SYNC_FROM:       ${{ inputs.from }}
           SYNC_TO:         ${{ inputs.to }}
-        run: npx tsx scripts/daily-sync.ts
+        run: npx tsx scripts/daily-prices-sync.ts
