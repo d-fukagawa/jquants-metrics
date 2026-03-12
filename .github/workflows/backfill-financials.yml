@@ -1,6 +1,9 @@
 name: Backfill Financials
 
 on:
+  schedule:
+    # 毎月1日 13:00 UTC（日本時間 22:00）に全銘柄をメンテナンス同期
+    - cron: '0 13 1 * *'
   workflow_dispatch:
     inputs:
       shard:
@@ -29,7 +32,8 @@ on:
         default: 'true'
 
 jobs:
-  backfill-financials:
+  backfill-financials-manual:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -52,4 +56,30 @@ jobs:
           RETRY_PER_CODE:  ${{ inputs.retry_per_code }}
           RATE_LIMIT_PER_MIN: ${{ inputs.rate_limit_per_min }}
           INCLUDE_DETAILS: ${{ inputs.include_details }}
+        run: npx tsx scripts/backfill-financials.ts
+
+  backfill-financials-scheduled:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: financial_summary / fins_details メンテナンス同期（定期）
+        env:
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          SHARD:           '0'
+          SHARDS:          '1'
+          SLEEP_MS:        '1000'
+          RETRY_PER_CODE:  '2'
+          RATE_LIMIT_PER_MIN: '60'
+          INCLUDE_DETAILS: 'true'
         run: npx tsx scripts/backfill-financials.ts

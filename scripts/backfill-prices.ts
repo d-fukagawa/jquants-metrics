@@ -9,6 +9,7 @@
  *   JQUANTS_API_KEY     JQuants API キー（必須）
  *   BACKFILL_FROM       取得開始日 YYYY-MM-DD（省略時: 180日前/JST）
  *   BACKFILL_TO         取得終了日 YYYY-MM-DD（省略時: 昨日/JST）
+ *   BACKFILL_DAYS       FROM/TO 未指定時に遡る日数（省略時: 180）
  *   INCLUDE_WEEKENDS    true なら土日も取得対象（省略時: false）
  *   RETRY_PER_DATE      日付ごとのリトライ回数（省略時: 3）
  */
@@ -84,8 +85,13 @@ async function runWithRetry<T>(fn: () => Promise<T>, retries: number): Promise<T
   }
 }
 
-const includeWeekends = (process.env.INCLUDE_WEEKENDS ?? 'false').toLowerCase() === 'true'
-const retryPerDate = Number(process.env.RETRY_PER_DATE ?? '3')
+const includeWeekends = (process.env.INCLUDE_WEEKENDS ?? 'false').trim().toLowerCase() === 'true'
+const retryPerDateRaw = (process.env.RETRY_PER_DATE ?? '').trim()
+const retryPerDate = retryPerDateRaw === '' ? 3 : Number(retryPerDateRaw)
+const backfillDaysRaw = (process.env.BACKFILL_DAYS ?? '').trim()
+const backfillDays = backfillDaysRaw === ''
+  ? 180
+  : Math.max(1, Number(backfillDaysRaw) || 180)
 const envOrUndef = (name: string): string | undefined => {
   const v = process.env[name]
   if (v == null) return undefined
@@ -95,7 +101,7 @@ const envOrUndef = (name: string): string | undefined => {
 
 const now = new Date()
 const defaultTo = fmtYmd(addDays(now, -1))
-const defaultFrom = fmtYmd(addDays(now, -180))
+const defaultFrom = fmtYmd(addDays(now, -backfillDays))
 const from = envOrUndef('BACKFILL_FROM') ?? defaultFrom
 const to = envOrUndef('BACKFILL_TO') ?? defaultTo
 

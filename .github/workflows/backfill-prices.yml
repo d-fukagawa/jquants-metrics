@@ -1,6 +1,9 @@
 name: Backfill Daily Prices
 
 on:
+  schedule:
+    # 毎週土曜 11:00 UTC（日本時間 20:00）に直近30日を補完
+    - cron: '0 11 * * 6'
   workflow_dispatch:
     inputs:
       from:
@@ -19,7 +22,8 @@ on:
         default: '3'
 
 jobs:
-  backfill-prices:
+  backfill-prices-manual:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -42,3 +46,25 @@ jobs:
           RETRY_PER_DATE:   ${{ inputs.retry_per_date }}
         run: npx tsx scripts/backfill-prices.ts
 
+  backfill-prices-scheduled:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: 直近30日 株価バックフィル（定期）
+        env:
+          DATABASE_URL:     ${{ secrets.DATABASE_URL }}
+          JQUANTS_API_KEY:  ${{ secrets.JQUANTS_API_KEY }}
+          BACKFILL_DAYS:    '30'
+          INCLUDE_WEEKENDS: 'false'
+          RETRY_PER_DATE:   '3'
+        run: npx tsx scripts/backfill-prices.ts
