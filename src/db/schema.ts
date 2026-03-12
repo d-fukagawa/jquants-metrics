@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, numeric, date, timestamp, primaryKey, index } from 'drizzle-orm/pg-core'
+import { pgTable, varchar, text, numeric, date, timestamp, primaryKey, index, integer, jsonb, boolean } from 'drizzle-orm/pg-core'
 
 // 銘柄マスタ — /v2/equities/master
 export const stockMaster = pgTable('stock_master', {
@@ -98,4 +98,122 @@ export const financialAdjustments = pgTable('financial_adjustments', {
   primaryKey({ columns: [t.code, t.discNo, t.itemKey, t.direction] }),
   index('idx_financial_adjustments_disc_date').on(t.discDate),
   index('idx_financial_adjustments_code').on(t.code),
+])
+
+// EDINET 企業コードマッピング
+export const edinetCompanyMap = pgTable('edinet_company_map', {
+  code:       varchar('code', { length: 5 }).primaryKey(),
+  edinetCode: text('edinet_code').notNull(),
+  updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  index('idx_edinet_company_map_edinet_code').on(t.edinetCode),
+])
+
+// EDINET 開示履歴（タイムライン）
+export const edinetFilings = pgTable('edinet_filings', {
+  edinetCode:    text('edinet_code').notNull(),
+  docId:         text('doc_id').notNull(),
+  code:          varchar('code', { length: 5 }),
+  filingDate:    date('filing_date').notNull(),
+  eventType:     text('event_type').notNull(),
+  title:         text('title').notNull(),
+  isAmendment:   boolean('is_amendment').notNull().default(false),
+  submittedAt:   timestamp('submitted_at', { withTimezone: true }),
+  sourceUpdatedAt: timestamp('source_updated_at', { withTimezone: true }),
+}, (t) => [
+  primaryKey({ columns: [t.edinetCode, t.docId] }),
+  index('idx_edinet_filings_code_date').on(t.code, t.filingDate),
+  index('idx_edinet_filings_date').on(t.filingDate),
+  index('idx_edinet_filings_event_type').on(t.eventType),
+])
+
+// EDINET 会社予想スナップショット（来期 / 再来期）
+export const edinetForecasts = pgTable('edinet_forecasts', {
+  code:         varchar('code', { length: 5 }).notNull(),
+  edinetCode:   text('edinet_code').notNull(),
+  fiscalYear:   text('fiscal_year').notNull(),
+  horizon:      text('horizon').notNull(), // next | next2
+  salesForecast: numeric('sales_forecast'),
+  opForecast:    numeric('op_forecast'),
+  npForecast:    numeric('np_forecast'),
+  epsForecast:   numeric('eps_forecast'),
+  disclosedAt:   date('disclosed_at'),
+  sourceDocId:   text('source_doc_id'),
+  updatedAt:     timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.code, t.horizon, t.fiscalYear] }),
+  index('idx_edinet_forecasts_code').on(t.code),
+  index('idx_edinet_forecasts_disclosed_at').on(t.disclosedAt),
+])
+
+// EDINET 会計調整ブリッジ算出用の要素
+export const edinetBridgeFacts = pgTable('edinet_bridge_facts', {
+  code:         varchar('code', { length: 5 }).notNull(),
+  edinetCode:   text('edinet_code').notNull(),
+  fiscalYear:   text('fiscal_year').notNull(),
+  periodType:   text('period_type').notNull(), // FY / 1Q / ...
+  operatingProfit: numeric('operating_profit'),
+  pretaxProfit:    numeric('pretax_profit'),
+  netProfit:       numeric('net_profit'),
+  cfo:             numeric('cfo'),
+  depreciation:    numeric('depreciation'),
+  adjustmentItemsJson: jsonb('adjustment_items_json'),
+  disclosedAt:     date('disclosed_at'),
+  sourceDocId:     text('source_doc_id'),
+  updatedAt:       timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.code, t.fiscalYear, t.periodType] }),
+  index('idx_edinet_bridge_facts_code').on(t.code),
+  index('idx_edinet_bridge_facts_disclosed_at').on(t.disclosedAt),
+])
+
+// EDINET 会計品質スコア
+export const edinetQualityScores = pgTable('edinet_quality_scores', {
+  code:           varchar('code', { length: 5 }).notNull(),
+  asOfDate:       date('as_of_date').notNull(),
+  qualityScore:   integer('quality_score').notNull(), // 0..100
+  componentsJson: jsonb('components_json').notNull(),
+  formulaText:    text('formula_text').notNull(),
+  updatedAt:      timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.code, t.asOfDate] }),
+  index('idx_edinet_quality_scores_code').on(t.code),
+])
+
+// EDINET テキスト異常スコア
+export const edinetTextScores = pgTable('edinet_text_scores', {
+  code:           varchar('code', { length: 5 }).notNull(),
+  asOfDate:       date('as_of_date').notNull(),
+  anomalyScore:   integer('anomaly_score').notNull(), // 0..100
+  componentsJson: jsonb('components_json').notNull(),
+  formulaText:    text('formula_text').notNull(),
+  updatedAt:      timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.code, t.asOfDate] }),
+  index('idx_edinet_text_scores_code').on(t.code),
+])
+
+// EDINET 同期実行ログ（監視）
+export const edinetSyncRuns = pgTable('edinet_sync_runs', {
+  runId:         text('run_id').primaryKey(),
+  target:        text('target').notNull(),
+  startedAt:     timestamp('started_at', { withTimezone: true }).notNull(),
+  endedAt:       timestamp('ended_at', { withTimezone: true }),
+  success:       boolean('success').notNull(),
+  http429Count:  integer('http_429_count').notNull().default(0),
+  http5xxCount:  integer('http_5xx_count').notNull().default(0),
+  rowsSynced:    integer('rows_synced').notNull().default(0),
+  errorMessage:  text('error_message'),
+}, (t) => [
+  index('idx_edinet_sync_runs_target_started').on(t.target, t.startedAt),
+])
+
+// ウォッチ銘柄（単一ユーザー前提）
+export const watchlist = pgTable('watchlist', {
+  code:      varchar('code', { length: 5 }).primaryKey(),
+  note:      text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  index('idx_watchlist_created_at').on(t.createdAt),
 ])
