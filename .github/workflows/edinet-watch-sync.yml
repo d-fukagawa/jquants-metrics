@@ -1,0 +1,90 @@
+name: EDINET Watch Sync
+
+on:
+  schedule:
+    # 平日 10:15 UTC（日本時間 19:15）: timeline + 変化銘柄深掘り
+    - cron: '15 10 * * 1-5'
+    # 毎週日曜 12:00 UTC（日本時間 21:00）: ウォッチ全件再計算
+    - cron: '0 12 * * 0'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'daily | weekly'
+        required: false
+        default: 'daily'
+      watchlist_bootstrap_codes:
+        description: '初期対象コード（カンマ区切り、例: 5592,212A,485A）'
+        required: false
+        default: '5592,212A,402A,5713,5016,5253,5843,5401,9503,5802,6227,485A'
+      max_codes_daily:
+        description: 'daily 対象最大銘柄数'
+        required: false
+        default: '30'
+      max_deep_dive_daily:
+        description: 'daily 深掘り最大銘柄数'
+        required: false
+        default: '8'
+      max_codes_weekly:
+        description: 'weekly 対象最大銘柄数'
+        required: false
+        default: '40'
+      timeline_lookback_days:
+        description: 'timeline 遡り日数'
+        required: false
+        default: '2'
+      sleep_ms:
+        description: 'API呼び出し間隔ms'
+        required: false
+        default: '700'
+
+jobs:
+  daily:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'daily' || github.event_name == 'schedule' && github.event.schedule == '15 10 * * 1-5' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: EDINET watch sync (daily)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EDINETDB_API_KEY: ${{ secrets.EDINETDB_API_KEY }}
+          EDINET_SYNC_MODE: daily
+          WATCHLIST_BOOTSTRAP_CODES: ${{ inputs.watchlist_bootstrap_codes || '5592,212A,402A,5713,5016,5253,5843,5401,9503,5802,6227,485A' }}
+          MAX_CODES_DAILY: ${{ inputs.max_codes_daily || '30' }}
+          MAX_DEEP_DIVE_DAILY: ${{ inputs.max_deep_dive_daily || '8' }}
+          TIMELINE_LOOKBACK_DAYS: ${{ inputs.timeline_lookback_days || '2' }}
+          SLEEP_MS: ${{ inputs.sleep_ms || '700' }}
+        run: npx tsx scripts/edinet-watch-sync.ts
+
+  weekly:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'weekly' || github.event_name == 'schedule' && github.event.schedule == '0 12 * * 0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: EDINET watch sync (weekly)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EDINETDB_API_KEY: ${{ secrets.EDINETDB_API_KEY }}
+          EDINET_SYNC_MODE: weekly
+          WATCHLIST_BOOTSTRAP_CODES: ${{ inputs.watchlist_bootstrap_codes || '5592,212A,402A,5713,5016,5253,5843,5401,9503,5802,6227,485A' }}
+          MAX_CODES_WEEKLY: ${{ inputs.max_codes_weekly || '40' }}
+          SLEEP_MS: ${{ inputs.sleep_ms || '700' }}
+        run: npx tsx scripts/edinet-watch-sync.ts
+
