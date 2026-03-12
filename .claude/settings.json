@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npm run test)",
+      "Bash(npm run test:watch)",
+      "Bash(npm run db:generate)",
+      "Bash(npm run db:migrate)",
+      "Bash(npm run db:studio)",
+      "Bash(npx drizzle-kit *)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(wrangler pages deploy*)",
+      "Bash(wrangler pages secret*)"
+    ]
+  }
+}

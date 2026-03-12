@@ -25,3 +25,6 @@ pnpm-debug.log*
 
 # local docs (not versioned)
 doc/*ガイド*.md
+
+# local Claude memory/project state (not versioned)
+.claude/projects/
