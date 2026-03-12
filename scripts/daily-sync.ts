@@ -7,8 +7,8 @@
  * 環境変数:
  *   DATABASE_URL     Neon 接続文字列（GitHub Secrets に設定）
  *   JQUANTS_API_KEY  JQuants API キー（GitHub Secrets に設定）
- *   SYNC_FROM        株価取得開始日 YYYY-MM-DD（省略時: 前日）
- *   SYNC_TO          株価取得終了日 YYYY-MM-DD（省略時: 前日）
+ *   SYNC_FROM        株価取得開始日 YYYY-MM-DD（省略時: 当日/JST）
+ *   SYNC_TO          株価取得終了日 YYYY-MM-DD（省略時: 当日/JST）
  */
 
 import { createDb } from '../src/db/client'
@@ -22,14 +22,27 @@ if (!databaseUrl || !apiKey) {
   process.exit(1)
 }
 
-function yesterday(): string {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  return d.toISOString().slice(0, 10)
+function todayJst(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+
+  const year = parts.find((p) => p.type === 'year')?.value
+  const month = parts.find((p) => p.type === 'month')?.value
+  const day = parts.find((p) => p.type === 'day')?.value
+
+  if (!year || !month || !day) {
+    throw new Error('failed to resolve JST date')
+  }
+  return `${year}-${month}-${day}`
 }
 
-const from = process.env.SYNC_FROM ?? yesterday()
-const to   = process.env.SYNC_TO   ?? yesterday()
+const defaultDate = todayJst()
+const from = process.env.SYNC_FROM ?? defaultDate
+const to   = process.env.SYNC_TO   ?? defaultDate
 
 console.log(`[sync] start  from=${from} to=${to}`)
 

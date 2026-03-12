@@ -2,15 +2,16 @@ name: Daily Data Sync
 
 on:
   schedule:
-    # 平日 07:00 UTC（日本時間 16:00、東証クローズ後）に実行
-    - cron: '0 7 * * 1-5'
+    # 平日 09:00 UTC（日本時間 18:00）に実行
+    # 当日終値データ反映（17:00以降目安）を待ってから取得する
+    - cron: '0 9 * * 1-5'
   workflow_dispatch:
     inputs:
       from:
-        description: '株価取得開始日 (YYYY-MM-DD)。省略時は前日'
+        description: '株価取得開始日 (YYYY-MM-DD)。省略時は当日/JST'
         required: false
       to:
-        description: '株価取得終了日 (YYYY-MM-DD)。省略時は前日'
+        description: '株価取得終了日 (YYYY-MM-DD)。省略時は当日/JST'
         required: false
 
 jobs:
