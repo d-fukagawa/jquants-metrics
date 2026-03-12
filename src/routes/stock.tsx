@@ -3,7 +3,16 @@ import type { Bindings } from '../types'
 import { createDb } from '../db/client'
 import { getStockByCode } from '../services/stockService'
 import { getRecentPrices } from '../services/priceService'
-import { getLatestFinancials, calcMetrics, fmtJpy, fmtVolume, getFinsDetailsLatest, calcAdvancedMetrics } from '../services/financialService'
+import {
+  getLatestFinancials,
+  calcMetrics,
+  fmtJpy,
+  fmtVolume,
+  getFinsDetailsLatest,
+  getFinancialAdjustmentsLatest,
+  calcAdvancedMetrics,
+  calcAdjustedEbitda,
+} from '../services/financialService'
 import { PriceChart } from '../components/PriceChart'
 import { MetricsCard } from '../components/MetricsCard'
 
@@ -17,11 +26,12 @@ stockRoute.get('/:code', async (c) => {
   const code5 = code4 + '0'
   const db    = createDb(c.env.DATABASE_URL)
 
-  const [stock, prices, financials, finsDetail] = await Promise.all([
+  const [stock, prices, financials, finsDetail, adjustments] = await Promise.all([
     getStockByCode(db, code5),
     getRecentPrices(db, code5, 60),
     getLatestFinancials(db, code5),
     getFinsDetailsLatest(db, code5),
+    getFinancialAdjustmentsLatest(db, code5),
   ])
 
   if (!stock) {
@@ -42,7 +52,21 @@ stockRoute.get('/:code', async (c) => {
   const metrics    = calcMetrics(latestClose, financials)
   const fy         = financials.find(f => f.curPerType === 'FY') ?? financials[0] ?? null
   const advMetrics = calcAdvancedMetrics(latestClose, fy, finsDetail)
+  const adjMetrics = calcAdjustedEbitda(fy, finsDetail, adjustments)
   const recentPrices = prices.slice(0, 10)
+  const showAdvanced = fy !== null && (
+    advMetrics.evEbitda !== null ||
+    advMetrics.roic !== null ||
+    advMetrics.netCash !== null ||
+    adjMetrics.reason !== 'op_missing'
+  )
+
+  const adjustedStatus = {
+    ok: '算出済み（model）',
+    op_missing: '営業利益データ不足',
+    dna_missing: 'D&A データ不足',
+    adjustment_missing: '調整項目データ不足',
+  }[adjMetrics.reason]
 
   return c.render(
     <div>
@@ -148,7 +172,7 @@ stockRoute.get('/:code', async (c) => {
       </div>
 
       {/* 高度財務指標（Phase 3）*/}
-      {(advMetrics.evEbitda !== null || advMetrics.roic !== null || advMetrics.netCash !== null) && (
+      {showAdvanced && (
         <>
           <div class="section-title">高度財務指標（EV/EBITDA・ROIC・ネットキャッシュ）</div>
           <div class="fin-grid">
@@ -167,6 +191,9 @@ stockRoute.get('/:code', async (c) => {
             <div class="card card-body">
               <div class="fin-block-title">EV/EBITDA・ROIC</div>
               <div class="fin-row"><span class="fin-key">EBITDA</span><span class="fin-val">{advMetrics.ebitda !== null ? fmtJpy(String(advMetrics.ebitda)) : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">調整後EBITDA（model）</span><span class="fin-val">{adjMetrics.adjustedEbitda !== null ? fmtJpy(String(adjMetrics.adjustedEbitda)) : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">調整項目（加算）</span><span class="fin-val">{adjMetrics.addbackTotal > 0 ? fmtJpy(String(adjMetrics.addbackTotal)) : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">調整項目（控除）</span><span class="fin-val">{adjMetrics.deductionTotal > 0 ? fmtJpy(String(adjMetrics.deductionTotal)) : '—'}</span></div>
               <div class="fin-row"><span class="fin-key">EV/EBITDA</span><span class="fin-val">{advMetrics.evEbitda !== null ? `${advMetrics.evEbitda}x` : '—'}</span></div>
               <div class="fin-row"><span class="fin-key">NOPAT</span><span class="fin-val">{advMetrics.nopat !== null ? fmtJpy(String(advMetrics.nopat)) : '—'}</span></div>
               <div class="fin-row"><span class="fin-key">投下資本</span><span class="fin-val">{advMetrics.investedCap !== null ? fmtJpy(String(advMetrics.investedCap)) : '—'}</span></div>
@@ -176,8 +203,12 @@ stockRoute.get('/:code', async (c) => {
                   {advMetrics.roic !== null ? `${advMetrics.roic}%` : '—'}
                 </span>
               </div>
+              <div class="fin-row"><span class="fin-key">調整後EBITDA 算出状態</span><span class="fin-val">{adjustedStatus}</span></div>
             </div>
           </div>
+          <p class="empty-state" style="text-align:left;padding:0 0 14px 0">
+            調整後EBITDA は会社開示の正式値ではなく、`fins/details` の調整項目候補から算出した model 推定値です。
+          </p>
         </>
       )}
 

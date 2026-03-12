@@ -9,6 +9,7 @@ export interface ScreenFilters {
   eqArMin?: number; eqArMax?: number  // input in % (0–100); stored as decimal
   psrMin?: number; psrMax?: number
   evEbitdaMin?: number; evEbitdaMax?: number
+  evAdjustedEbitdaMin?: number; evAdjustedEbitdaMax?: number
   netCashRatioMin?: number; netCashRatioMax?: number
   profitOnly?: boolean
   cfoPositive?: boolean
@@ -33,6 +34,7 @@ export interface ScreenRow {
   eqAr: number | null   // decimal (0–1); multiply by 100 to get %
   psr: number | null
   evEbitda: number | null
+  evAdjustedEbitda: number | null
   netCashRatio: number | null
 }
 
@@ -68,6 +70,7 @@ export async function screenStocks(
   addRange('div_yield',      filters.divYieldMin,     filters.divYieldMax)
   addRange('psr',            filters.psrMin,          filters.psrMax)
   addRange('ev_ebitda',      filters.evEbitdaMin,     filters.evEbitdaMax)
+  addRange('ev_adjusted_ebitda', filters.evAdjustedEbitdaMin, filters.evAdjustedEbitdaMax)
   addRange('net_cash_ratio', filters.netCashRatioMin, filters.netCashRatioMax)
 
   // eq_ar stored as decimal (0–1); convert user-input % to decimal
@@ -126,6 +129,24 @@ export async function screenStocks(
       FROM fins_details
       ORDER BY code, (dna IS NOT NULL) DESC, disc_date DESC
     ),
+    latest_adjustment_disc AS (
+      SELECT DISTINCT ON (code)
+        code,
+        disc_no
+      FROM financial_adjustments
+      ORDER BY code, disc_date DESC
+    ),
+    adjustment_totals AS (
+      SELECT
+        fa.code,
+        SUM(CASE WHEN fa.direction = 'addback' THEN fa.amount::float ELSE 0 END) AS addback_total,
+        SUM(CASE WHEN fa.direction = 'deduction' THEN fa.amount::float ELSE 0 END) AS deduction_total
+      FROM financial_adjustments fa
+      JOIN latest_adjustment_disc lad
+        ON lad.code = fa.code
+       AND lad.disc_no = fa.disc_no
+      GROUP BY fa.code
+    ),
     computed AS (
       SELECT
         sm.code,
@@ -166,6 +187,16 @@ export async function screenStocks(
             / (f.op + d.dna)
           )::numeric, 1)::float
           ELSE NULL END AS ev_ebitda,
+        -- EV/調整後EBITDA（financial_adjustments が必要）
+        CASE WHEN d.dna IS NOT NULL AND f.op IS NOT NULL
+              AND a.addback_total IS NOT NULL AND a.deduction_total IS NOT NULL
+              AND (f.op + d.dna + a.addback_total - a.deduction_total) > 0
+              AND f.sh_out_fy > 0 AND f.cash_eq IS NOT NULL
+          THEN ROUND((
+            (p.close * f.sh_out_fy - (f.cash_eq - d.debt_current - d.debt_non_curr))
+            / (f.op + d.dna + a.addback_total - a.deduction_total)
+          )::numeric, 1)::float
+          ELSE NULL END AS ev_adjusted_ebitda,
         -- ネットキャッシュ比率 = (CashEq - 有利子負債) / 時価総額
         CASE WHEN f.cash_eq IS NOT NULL AND f.sh_out_fy > 0 AND p.close * f.sh_out_fy > 0
           THEN ROUND((
@@ -177,6 +208,7 @@ export async function screenStocks(
       JOIN latest_price   p ON p.code = sm.code
       JOIN latest_fin     f ON f.code = sm.code
       LEFT JOIN latest_details d ON d.code = sm.code
+      LEFT JOIN adjustment_totals a ON a.code = sm.code
     )
     SELECT *, COUNT(*) OVER() AS total_count
     FROM computed
@@ -202,6 +234,7 @@ export async function screenStocks(
     eqAr:         r.eq_ar          != null ? Number(r.eq_ar)          : null,
     psr:          r.psr            != null ? Number(r.psr)            : null,
     evEbitda:     r.ev_ebitda      != null ? Number(r.ev_ebitda)      : null,
+    evAdjustedEbitda: r.ev_adjusted_ebitda != null ? Number(r.ev_adjusted_ebitda) : null,
     netCashRatio: r.net_cash_ratio != null ? Number(r.net_cash_ratio) : null,
   }))
 

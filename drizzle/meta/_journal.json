@@ -15,6 +15,13 @@
       "when": 1773304394614,
       "tag": "0001_needy_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773317110618,
+      "tag": "0002_true_jasper_sitwell",
+      "breakpoints": true
     }
   ]
 }

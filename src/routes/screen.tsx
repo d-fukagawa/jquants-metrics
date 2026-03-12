@@ -45,6 +45,8 @@ screenRoute.get('/', async (c) => {
     psrMax:          parseNum(q('psr_max')),
     evEbitdaMin:     parseNum(q('ev_ebitda_min')),
     evEbitdaMax:     parseNum(q('ev_ebitda_max')),
+    evAdjustedEbitdaMin: parseNum(q('ev_adj_ebitda_min')),
+    evAdjustedEbitdaMax: parseNum(q('ev_adj_ebitda_max')),
     netCashRatioMin: parseNum(q('nc_ratio_min')),
     netCashRatioMax: parseNum(q('nc_ratio_max')),
     profitOnly:  q('profit_only') === '1',
@@ -77,6 +79,8 @@ screenRoute.get('/', async (c) => {
     if (filters.psrMax          != null) params.set('psr_max',       String(filters.psrMax))
     if (filters.evEbitdaMin     != null) params.set('ev_ebitda_min', String(filters.evEbitdaMin))
     if (filters.evEbitdaMax     != null) params.set('ev_ebitda_max', String(filters.evEbitdaMax))
+    if (filters.evAdjustedEbitdaMin != null) params.set('ev_adj_ebitda_min', String(filters.evAdjustedEbitdaMin))
+    if (filters.evAdjustedEbitdaMax != null) params.set('ev_adj_ebitda_max', String(filters.evAdjustedEbitdaMax))
     if (filters.netCashRatioMin != null) params.set('nc_ratio_min',  String(filters.netCashRatioMin))
     if (filters.netCashRatioMax != null) params.set('nc_ratio_max',  String(filters.netCashRatioMax))
     if (filters.profitOnly)          params.set('profit_only',   '1')
@@ -217,6 +221,16 @@ screenRoute.get('/', async (c) => {
               </div>
             </div>
 
+            {/* EV/調整後EBITDA（model） */}
+            <div>
+              <div class="fg-label">EV/調整後EBITDA（model, 倍）</div>
+              <div class="range-row">
+                <input class="input-sm" type="number" name="ev_adj_ebitda_min" step="0.1" placeholder="下限" value={filters.evAdjustedEbitdaMin ?? ''} min="0" />
+                <span class="range-sep">〜</span>
+                <input class="input-sm" type="number" name="ev_adj_ebitda_max" step="0.1" placeholder="上限" value={filters.evAdjustedEbitdaMax ?? ''} min="0" />
+              </div>
+            </div>
+
             {/* ネットキャッシュ比率 */}
             <div>
               <div class="fg-label">NC比率（ネットキャッシュ/時価総額）</div>
@@ -277,6 +291,9 @@ screenRoute.get('/', async (c) => {
             {currentPage > 1 ? `${(currentPage - 1) * PAGE_SIZE + 1}〜${Math.min(currentPage * PAGE_SIZE, total)}件` : ''}
           </span>
         </div>
+        <p class="empty-state" style="text-align:left;padding:0 0 8px 0">
+          `EV/調整後EBITDA（model）` は会社開示の正式値ではなく、調整項目候補から算出した推定値です。
+        </p>
 
         <div class="card">
           <div class="table-wrap">
@@ -295,13 +312,14 @@ screenRoute.get('/', async (c) => {
                   <th class="r">自己資本比率</th>
                   <th class="r">PSR</th>
                   <th class="r">EV/EBITDA</th>
+                  <th class="r">EV/調整後EBITDA<br />（model）</th>
                   <th class="r">NC比率</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colspan={13} style="text-align:center;color:var(--muted-fg);padding:40px">
+                    <td colspan={14} style="text-align:center;color:var(--muted-fg);padding:40px">
                       条件に一致する銘柄がありません
                     </td>
                   </tr>
@@ -328,6 +346,7 @@ screenRoute.get('/', async (c) => {
                       <td class="r">{fmtEqAr(r.eqAr)}</td>
                       <td class="r">{fmtMetric(r.psr, 'x')}</td>
                       <td class="r">{fmtMetric(r.evEbitda, 'x')}</td>
+                      <td class="r">{fmtMetric(r.evAdjustedEbitda, 'x')}</td>
                       <td class="r">{r.netCashRatio != null ? `${r.netCashRatio}x` : '—'}</td>
                     </tr>
                   )

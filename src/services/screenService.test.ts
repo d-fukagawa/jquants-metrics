@@ -8,6 +8,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     mkt_nm: 'プライム', scale_cat: 'TOPIX Core30', mrgn_nm: '貸借',
     close: 3450, np: 1_000_000, cfo: 500_000, eq_ar: 0.384,
     per: 12.5, pbr: 1.1, roe: 11.0, div_yield: 2.5, psr: 0.3,
+    ev_ebitda: 8.5, ev_adjusted_ebitda: 7.9, net_cash_ratio: 0.12,
     mktcap: 50_000_000, total_count: 1,
     ...overrides,
   }
@@ -39,6 +40,9 @@ describe('screenStocks', () => {
       divYield: 2.5,
       eqAr: 0.384,
       psr: 0.3,
+      evEbitda: 8.5,
+      evAdjustedEbitda: 7.9,
+      netCashRatio: 0.12,
     })
   })
 
@@ -50,13 +54,19 @@ describe('screenStocks', () => {
   })
 
   it('handles null values in numeric fields', async () => {
-    const row = makeRow({ per: null, pbr: null, roe: null, div_yield: null, psr: null, close: null, eq_ar: null })
+    const row = makeRow({
+      per: null, pbr: null, roe: null, div_yield: null, psr: null, close: null, eq_ar: null,
+      ev_ebitda: null, ev_adjusted_ebitda: null, net_cash_ratio: null,
+    })
     const { db } = makeMockDb([row])
     const { rows } = await screenStocks(db, {})
     expect(rows[0].per).toBeNull()
     expect(rows[0].pbr).toBeNull()
     expect(rows[0].close).toBeNull()
     expect(rows[0].eqAr).toBeNull()
+    expect(rows[0].evEbitda).toBeNull()
+    expect(rows[0].evAdjustedEbitda).toBeNull()
+    expect(rows[0].netCashRatio).toBeNull()
   })
 
   it('calls db.execute once per query', async () => {

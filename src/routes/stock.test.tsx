@@ -5,7 +5,12 @@ import * as priceService    from '../services/priceService'
 // calcMetrics / fmtJpy は純粋関数なので実装をそのまま使う
 vi.mock('../services/financialService', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../services/financialService')>()
-  return { ...mod, getLatestFinancials: vi.fn(), getFinsDetailsLatest: vi.fn() }
+  return {
+    ...mod,
+    getLatestFinancials: vi.fn(),
+    getFinsDetailsLatest: vi.fn(),
+    getFinancialAdjustmentsLatest: vi.fn(),
+  }
 })
 import * as financialService from '../services/financialService'
 
@@ -74,6 +79,7 @@ describe('GET /stock/:code — not found', () => {
     vi.mocked(priceService.getRecentPrices).mockResolvedValue([])
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue([])
     vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
+    vi.mocked(financialService.getFinancialAdjustmentsLatest).mockResolvedValue([])
   })
 
   it('returns 404 when stock not found in DB', async () => {
@@ -90,6 +96,7 @@ describe('GET /stock/:code — found', () => {
     vi.mocked(priceService.getRecentPrices).mockResolvedValue(PRICES as any)
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue(FINANCIALS as any)
     vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
+    vi.mocked(financialService.getFinancialAdjustmentsLatest).mockResolvedValue([])
   })
 
   it('returns 200', async () => {
@@ -168,6 +175,12 @@ describe('GET /stock/:code — found', () => {
     expect(html).toContain('決算履歴')
     expect(html).toContain('2025-03-01')
   })
+
+  it('renders adjusted EBITDA model status', async () => {
+    const html = await (await get('/7203')).text()
+    expect(html).toContain('調整後EBITDA（model）')
+    expect(html).toContain('調整後EBITDA 算出状態')
+  })
 })
 
 // ---------- データなし ----------
@@ -178,6 +191,7 @@ describe('GET /stock/:code — empty prices / financials', () => {
     vi.mocked(priceService.getRecentPrices).mockResolvedValue([])
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue([])
     vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
+    vi.mocked(financialService.getFinancialAdjustmentsLatest).mockResolvedValue([])
   })
 
   it('shows sync prompt when no price data', async () => {

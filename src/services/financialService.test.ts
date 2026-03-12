@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { calcMetrics, fmtJpy, getLatestFinancials } from './financialService'
+import { calcAdjustedEbitda, calcAdvancedMetrics, calcMetrics, fmtJpy, getLatestFinancials } from './financialService'
 import type { Db } from '../db/client'
 
 // ---------- テストフィクスチャ ----------
@@ -13,6 +13,42 @@ const BASE_FY = {
   shOutFy: '13148000000', trShFy: '1000000000',
   divAnn: '107', fSales: null, fOp: null, fNp: null, fEps: null, fDivAnn: null,
 }
+
+const BASE_DETAIL = {
+  code: '72030',
+  discNo: 'D-001',
+  discDate: '2025-03-01',
+  docType: 'FY',
+  curPerType: 'FY',
+  debtCurrent: '50000000000',
+  debtNonCurr: '150000000000',
+  dna: '30000000000',
+  pretaxProfit: '120000000000',
+  taxExpense: '36000000000',
+}
+
+const BASE_ADJUSTMENTS = [
+  {
+    code: '72030',
+    discNo: 'D-001',
+    discDate: '2025-03-01',
+    itemKey: 'Impairment loss',
+    amount: '10000000000',
+    direction: 'addback',
+    category: 'impairment',
+    source: 'fins_details.statement',
+  },
+  {
+    code: '72030',
+    discNo: 'D-001',
+    discDate: '2025-03-01',
+    itemKey: 'Gain on sale of non-current assets',
+    amount: '2000000000',
+    direction: 'deduction',
+    category: 'gain',
+    source: 'fins_details.statement',
+  },
+]
 
 // ---------- calcMetrics ----------
 describe('calcMetrics', () => {
@@ -91,6 +127,98 @@ describe('calcMetrics', () => {
     const m = calcMetrics(3450, [BASE_FY])
     expect(m.eps).toBe(375.4)
     expect(m.divAnn).toBe(107)
+  })
+})
+
+// ---------- calcAdvancedMetrics ----------
+describe('calcAdvancedMetrics', () => {
+  it('calculates EBITDA from OP + D&A', () => {
+    const fy = { ...BASE_FY, op: '100000000000', shOutFy: '100', cashEq: '200000000000' }
+    const d  = { ...BASE_DETAIL, dna: '30000000000', debtCurrent: '50000000000', debtNonCurr: '150000000000' }
+    const m  = calcAdvancedMetrics(2000, fy, d)
+
+    // EBITDA = OP + D&A = 100,000,000,000 + 30,000,000,000
+    expect(m.ebitda).toBe(130000000000)
+    // OP はそのまま出発点として NOPAT 計算に使われる
+    expect(m.nopat).not.toBeNull()
+  })
+
+  it('returns null EBITDA when D&A is missing', () => {
+    const fy = { ...BASE_FY, op: '100000000000' }
+    const d  = { ...BASE_DETAIL, dna: null }
+    const m  = calcAdvancedMetrics(2000, fy, d)
+
+    expect(m.ebitda).toBeNull()
+    expect(m.evEbitda).toBeNull()
+  })
+
+  it('returns null EBITDA when operating income is missing', () => {
+    const fy = { ...BASE_FY, op: null }
+    const m  = calcAdvancedMetrics(2000, fy, BASE_DETAIL)
+
+    expect(m.ebitda).toBeNull()
+    expect(m.nopat).toBeNull()
+  })
+})
+
+// ---------- calcAdjustedEbitda ----------
+describe('calcAdjustedEbitda', () => {
+  it('calculates adjusted EBITDA with addback and deduction items', () => {
+    const fy = { ...BASE_FY, op: '100000000000' }
+    const d  = { ...BASE_DETAIL, dna: '30000000000' }
+    const m  = calcAdjustedEbitda(fy, d, BASE_ADJUSTMENTS)
+
+    // EBITDA = 130,000,000,000
+    expect(m.ebitda).toBe(130000000000)
+    // adjusted = 130,000,000,000 + 10,000,000,000 - 2,000,000,000
+    expect(m.adjustedEbitda).toBe(138000000000)
+    expect(m.addbackTotal).toBe(10000000000)
+    expect(m.deductionTotal).toBe(2000000000)
+    expect(m.reason).toBe('ok')
+  })
+
+  it('matches manual reconciliation: OP -> EBITDA -> Adjusted EBITDA', () => {
+    const fy = { ...BASE_FY, op: '12000000000' } // 営業利益 120億
+    const d  = { ...BASE_DETAIL, dna: '3000000000' } // D&A 30億
+    const adjustments = [
+      { ...BASE_ADJUSTMENTS[0], amount: '500000000' }, // 加算 5億
+      { ...BASE_ADJUSTMENTS[1], amount: '200000000' }, // 控除 2億
+    ]
+    const m = calcAdjustedEbitda(fy, d, adjustments)
+
+    // 手計算:
+    // EBITDA = 120億 + 30億 = 150億
+    // 調整後EBITDA = 150億 + 5億 - 2億 = 153億
+    expect(m.ebitda).toBe(15000000000)
+    expect(m.adjustedEbitda).toBe(15300000000)
+
+    // 差分分解: 調整後EBITDA - 営業利益 = D&A + 加算 - 控除
+    const op = 12000000000
+    expect((m.adjustedEbitda ?? 0) - op).toBe(3300000000)
+    expect(3000000000 + 500000000 - 200000000).toBe(3300000000)
+  })
+
+  it('returns op_missing when operating income is missing', () => {
+    const fy = { ...BASE_FY, op: null }
+    const m  = calcAdjustedEbitda(fy, BASE_DETAIL, BASE_ADJUSTMENTS)
+    expect(m.reason).toBe('op_missing')
+    expect(m.ebitda).toBeNull()
+    expect(m.adjustedEbitda).toBeNull()
+  })
+
+  it('returns dna_missing when depreciation is missing', () => {
+    const d = { ...BASE_DETAIL, dna: null }
+    const m = calcAdjustedEbitda(BASE_FY, d, BASE_ADJUSTMENTS)
+    expect(m.reason).toBe('dna_missing')
+    expect(m.ebitda).toBeNull()
+    expect(m.adjustedEbitda).toBeNull()
+  })
+
+  it('returns adjustment_missing when adjustment rows are empty', () => {
+    const m = calcAdjustedEbitda(BASE_FY, BASE_DETAIL, [])
+    expect(m.reason).toBe('adjustment_missing')
+    expect(m.ebitda).toBe(5030000000000)
+    expect(m.adjustedEbitda).toBeNull()
   })
 })
 

@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm'
 import type { Db } from '../db/client'
-import { financialSummary, finsDetails } from '../db/schema'
+import { financialAdjustments, financialSummary, finsDetails } from '../db/schema'
 
 export type FinancialRow = Awaited<ReturnType<typeof getLatestFinancials>>[number]
 
@@ -100,6 +100,7 @@ function round2(n: number) { return Math.round(n * 100) / 100 }
 // ── 高度財務指標（fins_details が必要）───────────────────────────────────────
 
 export type FinsDetailRow = Awaited<ReturnType<typeof getFinsDetailsLatest>>
+export type FinancialAdjustmentRow = Awaited<ReturnType<typeof getFinancialAdjustmentsLatest>>[number]
 
 // 最新の fins_details レコードを返す（なければ null）
 export async function getFinsDetailsLatest(db: Db, code5: string) {
@@ -112,6 +113,18 @@ export async function getFinsDetailsLatest(db: Db, code5: string) {
   return rows[0] ?? null
 }
 
+// 最新開示の financial_adjustments 一式を返す（なければ空配列）
+export async function getFinancialAdjustmentsLatest(db: Db, code5: string) {
+  const rows = await db
+    .select()
+    .from(financialAdjustments)
+    .where(eq(financialAdjustments.code, code5))
+    .orderBy(desc(financialAdjustments.discDate))
+  if (rows.length === 0) return []
+  const latestDiscNo = rows[0].discNo
+  return rows.filter(r => r.discNo === latestDiscNo)
+}
+
 export interface AdvancedMetrics {
   mktCap:       number | null   // 時価総額（円）
   netCash:      number | null   // ネットキャッシュ = CashEq - 有利子負債合計
@@ -122,6 +135,20 @@ export interface AdvancedMetrics {
   roic:         number | null   // ROIC（%）
   nopat:        number | null   // NOPAT = OP × (1 - 実効税率)
   investedCap:  number | null   // 投下資本 = Eq + 有利子負債 - CashEq
+}
+
+export type AdjustedEbitdaReason =
+  | 'ok'
+  | 'op_missing'
+  | 'dna_missing'
+  | 'adjustment_missing'
+
+export interface AdjustedEbitdaMetrics {
+  ebitda: number | null
+  adjustedEbitda: number | null
+  addbackTotal: number
+  deductionTotal: number
+  reason: AdjustedEbitdaReason
 }
 
 export function calcAdvancedMetrics(
@@ -189,4 +216,43 @@ export function calcAdvancedMetrics(
     : null
 
   return { mktCap, netCash, netCashRatio, ev, ebitda, evEbitda, roic, nopat, investedCap }
+}
+
+export function calcAdjustedEbitda(
+  fy: FinancialRow | null,
+  detail: FinsDetailRow | null,
+  adjustments: FinancialAdjustmentRow[],
+): AdjustedEbitdaMetrics {
+  const op = fy ? parseNum(fy.op) : null
+  if (op === null) {
+    return { ebitda: null, adjustedEbitda: null, addbackTotal: 0, deductionTotal: 0, reason: 'op_missing' }
+  }
+
+  const dna = detail ? parseNum(detail.dna) : null
+  if (dna === null) {
+    return { ebitda: null, adjustedEbitda: null, addbackTotal: 0, deductionTotal: 0, reason: 'dna_missing' }
+  }
+
+  const ebitda = round0(op + dna)
+  if (!adjustments || adjustments.length === 0) {
+    return { ebitda, adjustedEbitda: null, addbackTotal: 0, deductionTotal: 0, reason: 'adjustment_missing' }
+  }
+
+  let addbackTotal = 0
+  let deductionTotal = 0
+  for (const a of adjustments) {
+    const n = parseNum(a.amount)
+    if (n === null || n === 0) continue
+    if (a.direction === 'addback') addbackTotal += Math.abs(n)
+    if (a.direction === 'deduction') deductionTotal += Math.abs(n)
+  }
+
+  const adjustedEbitda = round0(ebitda + addbackTotal - deductionTotal)
+  return {
+    ebitda,
+    adjustedEbitda,
+    addbackTotal: round0(addbackTotal),
+    deductionTotal: round0(deductionTotal),
+    reason: 'ok',
+  }
 }

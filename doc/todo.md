@@ -215,6 +215,44 @@ gh workflow run backfill-prices.yml --ref main -f from=2025-08-01 -f to=2025-08-
 
 ---
 
+## Phase 4 — EBITDA検証と調整後EBITDA反映（新規）
+
+### Step 15: 営業利益/EBITDAの検証基盤
+
+- [x] `financialService.test.ts` に営業利益・EBITDA再計算テストを追加
+- [x] `syncStatusService.ts` に検証用集計（EBITDA算出可能銘柄数）を追加
+- [x] `/sync-status` で検証メトリクスを表示
+
+### Step 16: 調整後EBITDA（model）データ取得
+
+- [x] `syncService.ts` に調整項目候補（加算/控除）抽出キーを追加
+- [x] `schema.ts` に調整項目保存テーブル（例: `financial_adjustments`）を追加
+- [x] `npm run db:generate` / `npm run db:migrate` で反映
+
+### Step 17: 調整後EBITDA（model）計算ロジック
+
+- [x] `financialService.ts` に `calcAdjustedEbitda` を追加
+- [x] 算出不可時の理由コード（`dna_missing`, `adjustment_missing` など）を返す
+- [x] `screenService.ts` に `EV/調整後EBITDA` 算出を追加（任意）
+
+### Step 18: UI 反映（推定値ラベル付き）
+
+- [x] `stock.tsx` に EBITDA・調整後EBITDA・差分内訳を表示
+- [x] `screen.tsx` に `EV/調整後EBITDA` 列とフィルターを追加（`model` 明記）
+- [x] 調整後EBITDAは「会社開示値ではなく推定値」である旨を表示
+
+### Step 19: 検証と回帰確認
+
+- [x] `npm run test` で既存 + 追加テストが通ることを確認
+- [x] サンプル銘柄で `営業利益 -> EBITDA -> 調整後EBITDA` の内訳を手計算と照合
+- [x] `/screen` で `EV/EBITDA` 既存指標に回帰がないことを確認
+
+補足:
+- `会社開示そのままの調整後EBITDA` は、JQuants API のみでは項目不足で完全再現が難しい
+- 本フェーズでは `model_adjusted_ebitda`（推定値）として実装し、内訳を可視化する
+
+---
+
 ## メモ
 
 ### JQuants API v2 実フィールド名（実測値）

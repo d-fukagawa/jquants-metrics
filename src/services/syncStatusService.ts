@@ -20,6 +20,7 @@ export interface SyncStatusSummary {
   missingPriceOnLatest: number | null
   financialCoveragePct: number | null
   finsDetailsCoveragePct: number | null
+  ebitdaReadyCount: number
   evEbitdaReadyCount: number
 }
 
@@ -107,6 +108,31 @@ export async function getSyncStatusSummary(db: Db): Promise<SyncStatusSummary> {
   const detailsLatestRow = (detailsLatestResult.rows[0] ?? {}) as Record<string, unknown>
   const finsDetailsLatestDiscDateCount = toNum(detailsLatestRow.latest_count)
 
+  const ebitdaReadyResult = await db.execute(sql`
+    WITH latest_fin AS (
+      SELECT DISTINCT ON (code)
+        code,
+        op::float AS op
+      FROM financial_summary
+      WHERE cur_per_type = 'FY'
+      ORDER BY code, disc_date DESC
+    ),
+    latest_details AS (
+      SELECT DISTINCT ON (code)
+        code,
+        dna::float AS dna
+      FROM fins_details
+      ORDER BY code, (dna IS NOT NULL) DESC, disc_date DESC
+    )
+    SELECT COUNT(*)::int AS ready_count
+    FROM latest_fin f
+    JOIN latest_details d ON d.code = f.code
+    WHERE f.op IS NOT NULL
+      AND d.dna IS NOT NULL
+  `)
+  const ebitdaReadyRow = (ebitdaReadyResult.rows[0] ?? {}) as Record<string, unknown>
+  const ebitdaReadyCount = toNum(ebitdaReadyRow.ready_count)
+
   const evReadyResult = await db.execute(sql`
     WITH latest_price AS (
       SELECT DISTINCT ON (code) code, adj_close::float AS close
@@ -175,6 +201,7 @@ export async function getSyncStatusSummary(db: Db): Promise<SyncStatusSummary> {
     missingPriceOnLatest,
     financialCoveragePct,
     finsDetailsCoveragePct,
+    ebitdaReadyCount,
     evEbitdaReadyCount,
   }
 }

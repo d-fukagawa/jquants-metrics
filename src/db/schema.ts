@@ -83,3 +83,19 @@ export const finsDetails = pgTable('fins_details', {
   primaryKey({ columns: [t.code, t.discNo] }),
   index('idx_fins_details_disc_date').on(t.discDate),
 ])
+
+// 調整項目 — 調整後EBITDA（model）算出用の候補項目
+export const financialAdjustments = pgTable('financial_adjustments', {
+  code:      varchar('code', { length: 5 }).notNull(),
+  discNo:    text('disc_no').notNull(),
+  discDate:  date('disc_date'),
+  itemKey:   text('item_key').notNull(),                 // XBRL Statement key
+  amount:    numeric('amount').notNull(),                // 金額（円）
+  direction: text('direction').notNull(),                // addback | deduction
+  category:  text('category').notNull(),                 // impairment | restructuring | gain | one_off
+  source:    text('source').notNull(),                   // fins_details.statement
+}, (t) => [
+  primaryKey({ columns: [t.code, t.discNo, t.itemKey, t.direction] }),
+  index('idx_financial_adjustments_disc_date').on(t.discDate),
+  index('idx_financial_adjustments_code').on(t.code),
+])

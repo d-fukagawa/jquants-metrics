@@ -290,6 +290,72 @@ ROIC          = NOPAT ÷ 投下資本
 
 ---
 
+## 追加計画: 営業利益・EBITDA・調整後EBITDA 検証と反映（2026-03-12）
+
+`doc/ebitda_calculation_guide.md` を仮説として、既存実装の算出妥当性を検証し、調整後EBITDAを反映可能かを評価する。
+
+### 現状整理
+
+- 営業利益: `financial_summary.op` を利用済み
+- EBITDA: `OP + D&A`（`fins_details.dna`）で算出済み
+- 調整後EBITDA: 未実装
+
+### 実装可否（結論）
+
+- `会社開示そのままの調整後EBITDA`: **自動反映は困難**
+  - 理由: JQuants `fins/summary` と `fins/details` だけでは「一時費用/一時利益」の定義済み項目を十分に取得できないため
+- `当アプリ定義の調整後EBITDA（推定値）`: **実装可能**
+  - 方式: `EBITDA + 一時費用加算戻し - 一時利益控除` を XBRL キー辞書ベースで算出
+  - 表示: 「model_adjusted_ebitda（推定）」としてラベル明示
+
+### ファイル単位タスク分解
+
+1. 計算定義と検証ケースの固定
+   - `doc/ebitda_calculation_guide.md`: 仮説定義の参照元
+   - `doc/plan.md`: 運用定義（reported/model）を追記
+   - `src/services/financialService.test.ts`: 営業利益→EBITDA→調整後EBITDAの段階テストを追加
+
+2. データ取得と保存の拡張
+   - `src/services/syncService.ts`: `Statement` から調整候補項目を抽出するキー辞書を追加
+   - `src/db/schema.ts`: 調整項目保存テーブル（例: `financial_adjustments`）を追加
+   - `drizzle/*`: マイグレーション生成
+
+3. 計算ロジックの実装
+   - `src/services/financialService.ts`: `calcAdjustedEbitda` を追加
+   - `src/services/screenService.ts`: `ev_adjusted_ebitda` 算出列を追加（任意フィルター）
+   - `src/services/syncStatusService.ts`: 調整後EBITDA算出可能銘柄数を集計
+
+4. 表示/UI 反映
+   - `src/routes/stock.tsx`: EBITDA・調整後EBITDA・差分内訳を表示
+   - `src/routes/screen.tsx`: `EV/調整後EBITDA` の列とフィルターを追加（ラベルに推定値明記）
+   - `src/routes/syncStatus.tsx`: カバレッジ指標を表示
+
+5. テストと受け入れ
+   - `src/services/financialService.test.ts`: 指標計算テスト
+   - `src/services/screenService.test.ts`: SQL算出・フィルター条件テスト
+   - `src/routes/stock.test.tsx`: 表示回帰テスト
+   - `src/routes/screen.test.tsx`: クエリ/表示テスト
+
+### 検証観点（必須）
+
+1. 営業利益の一致
+   - DB の `op` と画面表示が一致すること
+2. EBITDA の一致
+   - `op + dna` と表示値が一致すること
+3. 差分分解の妥当性
+   - `調整後EBITDA - 営業利益` を `D&A` と `調整項目純額` に分解できること
+4. 欠損時の説明可能性
+   - 算出不可時に `—` ではなく理由（`dna欠損`, `調整項目欠損`）を出すこと
+
+### 受け入れ基準
+
+- サンプル銘柄群で `営業利益` と `EBITDA` の再計算一致率 100%
+- `model_adjusted_ebitda` の算出式と内訳が UI で追跡可能
+- `/sync-status` で「調整後EBITDA算出可能銘柄数」を確認可能
+- `EV/EBITDA` 既存機能に回帰がない（既存テストが通る）
+
+---
+
 ## 検証方法
 
 1. `npm run dev` 起動後、`POST /api/sync` で一部銘柄データを DB に挿入

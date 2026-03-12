@@ -55,6 +55,11 @@ syncStatusRoute.get('/', async (c) => {
           <div class="metric-sub">銘柄数: {fmtNum(s.finsDetailsCodeCount)} / {fmtNum(s.masterCount)}</div>
         </div>
         <div class="metric-card">
+          <div class="metric-label">EBITDA 算出可能銘柄</div>
+          <div class="metric-value">{fmtNum(s.ebitdaReadyCount)}</div>
+          <div class="metric-sub">FY 営業利益 + D&A が揃う銘柄</div>
+        </div>
+        <div class="metric-card">
           <div class="metric-label">EV/EBITDA 算出可能銘柄</div>
           <div class="metric-value">{fmtNum(s.evEbitdaReadyCount)}</div>
           <div class="metric-sub">fins_details と FY 財務が揃う銘柄</div>

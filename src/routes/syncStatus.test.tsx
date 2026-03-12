@@ -38,6 +38,7 @@ describe('GET /sync-status', () => {
       missingPriceOnLatest: 10,
       financialCoveragePct: 99.0,
       finsDetailsCoveragePct: 85.7,
+      ebitdaReadyCount: 3000,
       evEbitdaReadyCount: 2500,
     })
 
@@ -49,6 +50,7 @@ describe('GET /sync-status', () => {
     expect(html).toContain('2026-03-11')
     expect(html).toContain('99.0%')
     expect(html).toContain('85.7%')
+    expect(html).toContain('3,000')
     expect(html).toContain('2,500')
   })
 
@@ -72,6 +74,7 @@ describe('GET /sync-status', () => {
       missingPriceOnLatest: null,
       financialCoveragePct: null,
       finsDetailsCoveragePct: null,
+      ebitdaReadyCount: 0,
       evEbitdaReadyCount: 0,
     })
 

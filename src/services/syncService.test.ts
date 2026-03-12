@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { syncStockMaster, syncDailyPrices, syncFinancialSummary } from './syncService'
+import { syncStockMaster, syncDailyPrices, syncFinancialSummary, syncFinsDetails } from './syncService'
 import * as jquants from '../jquants/client'
 import type { Db } from '../db/client'
 
@@ -164,6 +164,63 @@ describe('syncFinancialSummary', () => {
     vi.mocked(jquants.fetchFinancialSummary).mockResolvedValue([])
     const { db, insert } = makeMockDb()
     const count = await syncFinancialSummary(db, API_KEY, '72030')
+    expect(count).toBe(0)
+    expect(insert).not.toHaveBeenCalled()
+  })
+})
+
+// ---------- syncFinsDetails ----------
+describe('syncFinsDetails', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const detail = {
+    LocalCode: '72030',
+    DisclosureNumber: 'D202603120001',
+    DisclosedDate: '2026-03-12',
+    TypeOfDocument: 'FYFinancialStatements_Consolidated_IFRS',
+    TypeOfCurrentPeriod: 'FY',
+    Statement: {
+      'Depreciation and amortization': '30000000000',
+      'Short-term borrowings': '50000000000',
+      'Long-term borrowings': '150000000000',
+      'Impairment loss': '10000000000',
+      'Gain on sale of non-current assets': '2000000000',
+    },
+  }
+
+  it('returns number of synced details records', async () => {
+    vi.mocked(jquants.fetchFinsDetails).mockResolvedValue([detail])
+    const { db } = makeMockDb()
+    const count = await syncFinsDetails(db, API_KEY, '72030')
+    expect(count).toBe(1)
+  })
+
+  it('upserts fins_details and financial_adjustments', async () => {
+    vi.mocked(jquants.fetchFinsDetails).mockResolvedValue([detail])
+    const { db, insert, values } = makeMockDb()
+    await syncFinsDetails(db, API_KEY, '72030')
+
+    // 1回目: fins_details
+    expect(insert).toHaveBeenCalledTimes(2)
+    const finsRows = values.mock.calls[0][0]
+    expect(finsRows[0].code).toBe('72030')
+    expect(finsRows[0].dna).toBe('30000000000')
+    expect(finsRows[0].debtCurrent).toBe('50000000000')
+    expect(finsRows[0].debtNonCurr).toBe('150000000000')
+
+    // 2回目: financial_adjustments
+    const adjustmentRows = values.mock.calls[1][0]
+    expect(adjustmentRows).toHaveLength(2)
+    expect(adjustmentRows[0].direction).toBe('addback')
+    expect(adjustmentRows[0].itemKey).toBe('Impairment loss')
+    expect(adjustmentRows[1].direction).toBe('deduction')
+    expect(adjustmentRows[1].itemKey).toBe('Gain on sale of non-current assets')
+  })
+
+  it('returns 0 when API returns empty array', async () => {
+    vi.mocked(jquants.fetchFinsDetails).mockResolvedValue([])
+    const { db, insert } = makeMockDb()
+    const count = await syncFinsDetails(db, API_KEY, '72030')
     expect(count).toBe(0)
     expect(insert).not.toHaveBeenCalled()
   })

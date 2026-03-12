@@ -15,7 +15,7 @@ const MOCK_ROW = {
   code: '72030', coName: 'トヨタ自動車', sector17Nm: '自動車・輸送機',
   mktNm: 'プライム', scaleCat: 'TOPIX Core30', mrgnNm: '貸借',
   close: 3450, per: 12.5, pbr: 1.1, roe: 11.0, divYield: 2.5,
-  eqAr: 0.384, psr: 0.3,
+  eqAr: 0.384, psr: 0.3, evEbitda: 8.1, evAdjustedEbitda: 7.6, netCashRatio: 0.12,
 }
 
 async function get(path: string) {
@@ -45,8 +45,17 @@ describe('GET /screen', () => {
     expect(html).toContain('7203')
     expect(html).toContain('トヨタ自動車')
     expect(html).toContain('12.5x')
+    expect(html).toContain('8.1x')   // EV/EBITDA (既存指標)
+    expect(html).toContain('7.6x')
     expect(html).toContain('38.4%') // eqAr 0.384 → 38.4%
     expect(html).toContain('2.5%')  // divYield
+  })
+
+  it('renders model label for adjusted EBITDA metric', async () => {
+    const res = await get('/')
+    const html = await res.text()
+    expect(html).toContain('EV/調整後EBITDA')
+    expect(html).toContain('model')
   })
 
   it('shows total count', async () => {

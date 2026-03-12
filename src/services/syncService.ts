@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
-import { stockMaster, dailyPrices, financialSummary, finsDetails } from '../db/schema'
+import { stockMaster, dailyPrices, financialSummary, finsDetails, financialAdjustments } from '../db/schema'
 import { fetchEquitiesMaster, fetchDailyPrices, fetchDailyPricesAll, fetchFinancialSummary, fetchFinsDetails } from '../jquants/client'
 
 const BATCH_SIZE = 500
@@ -46,7 +46,70 @@ const KEYS = {
   ],
   pretaxProfit: ['Profit (loss) before tax from continuing operations (IFRS)', 'Profit before tax', 'PBT', 'IncomeBeforeIncomeTaxes'],
   taxExpense:   ['Income tax expense (IFRS)', 'Income taxes', 'Tax expense', 'IncomeTaxes'],
+  adjustments: {
+    addbacks: [
+      { key: 'Impairment loss', category: 'impairment' },
+      { key: 'Loss on business restructuring', category: 'restructuring' },
+      { key: 'Loss on disposal of non-current assets', category: 'one_off' },
+      { key: 'Loss on retirement of non-current assets', category: 'one_off' },
+      { key: 'Restructuring costs', category: 'restructuring' },
+    ],
+    deductions: [
+      { key: 'Gain on sale of non-current assets', category: 'gain' },
+      { key: 'Gain on disposal of non-current assets', category: 'gain' },
+      { key: 'Gain on step acquisitions', category: 'gain' },
+      { key: 'Gain on bargain purchase', category: 'gain' },
+      { key: 'Gain on sale of shares of subsidiaries and associates', category: 'gain' },
+    ],
+  },
 } as const
+
+function pickAdjustmentItems(stmt: Record<string, string>, code: string, discNo: string, discDate: string | null) {
+  const rows: Array<{
+    code: string
+    discNo: string
+    discDate: string | null
+    itemKey: string
+    amount: string
+    direction: 'addback' | 'deduction'
+    category: string
+    source: string
+  }> = []
+
+  for (const item of KEYS.adjustments.addbacks) {
+    const v = stmt[item.key]
+    const n = v == null || v === '' ? null : Number(v)
+    if (n == null || Number.isNaN(n) || n === 0) continue
+    rows.push({
+      code,
+      discNo,
+      discDate,
+      itemKey: item.key,
+      amount: String(Math.abs(n)),
+      direction: 'addback',
+      category: item.category,
+      source: 'fins_details.statement',
+    })
+  }
+
+  for (const item of KEYS.adjustments.deductions) {
+    const v = stmt[item.key]
+    const n = v == null || v === '' ? null : Number(v)
+    if (n == null || Number.isNaN(n) || n === 0) continue
+    rows.push({
+      code,
+      discNo,
+      discDate,
+      itemKey: item.key,
+      amount: String(Math.abs(n)),
+      direction: 'deduction',
+      category: item.category,
+      source: 'fins_details.statement',
+    })
+  }
+
+  return rows
+}
 
 // 銘柄マスタ同期 — /v2/equities/master
 export async function syncStockMaster(db: Db, apiKey: string): Promise<number> {
@@ -222,12 +285,28 @@ export async function syncFinsDetails(
   const details = await fetchFinsDetails(apiKey, code)
   if (details.length === 0) return 0
 
+  const adjustmentRows: Array<{
+    code: string
+    discNo: string
+    discDate: string | null
+    itemKey: string
+    amount: string
+    direction: 'addback' | 'deduction'
+    category: string
+    source: string
+  }> = []
+
   const rows = details.map(d => {
     const stmt = d.Statement ?? {}
+    const discNo = d.DisclosureNumber
+    const code5 = d.LocalCode ?? d.Code ?? code
+    const discDate = d.DisclosedDate || null
+    adjustmentRows.push(...pickAdjustmentItems(stmt, code5, discNo, discDate))
+
     return {
-      code:         d.LocalCode ?? d.Code ?? code,
-      discNo:       d.DisclosureNumber,
-      discDate:     d.DisclosedDate    || null,
+      code:         code5,
+      discNo:       discNo,
+      discDate:     discDate,
       docType:      d.TypeOfDocument   || null,
       curPerType:   d.TypeOfCurrentPeriod || null,
       debtCurrent:  toNum(firstMatch(stmt, KEYS.debtCurrent)),
@@ -255,6 +334,25 @@ export async function syncFinsDetails(
         taxExpense:   sql`excluded.tax_expense`,
       },
     })
+
+  if (adjustmentRows.length > 0) {
+    await db.insert(financialAdjustments)
+      .values(adjustmentRows)
+      .onConflictDoUpdate({
+        target: [
+          financialAdjustments.code,
+          financialAdjustments.discNo,
+          financialAdjustments.itemKey,
+          financialAdjustments.direction,
+        ],
+        set: {
+          discDate:  sql`excluded.disc_date`,
+          amount:    sql`excluded.amount`,
+          category:  sql`excluded.category`,
+          source:    sql`excluded.source`,
+        },
+      })
+  }
 
   return rows.length
 }
