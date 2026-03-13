@@ -16,6 +16,15 @@ import {
 
 export const themesRoute = new Hono<{ Bindings: Bindings }>()
 
+type ThemeNote = {
+  label: string
+  text: string
+}
+
+const MAX_NOTE_LABEL_LEN = 100
+const MAX_NOTE_TEXT_LEN = 5000
+const MAX_MEMO_RAW_LEN = 10_000
+
 function isDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const date = new Date(`${value}T00:00:00Z`)
@@ -42,6 +51,67 @@ function parseGranularity(raw: string | undefined): ThemeGranularity {
   return 'd'
 }
 
+function normalizeNote(labelRaw: unknown, textRaw: unknown): ThemeNote | null {
+  const label = String(labelRaw ?? '').trim().slice(0, MAX_NOTE_LABEL_LEN)
+  const text = String(textRaw ?? '').trim().slice(0, MAX_NOTE_TEXT_LEN)
+  if (!label && !text) return null
+  return { label, text }
+}
+
+function parseThemeNotes(memo: string): ThemeNote[] {
+  const raw = memo.trim()
+  if (!raw) return []
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) throw new Error('invalid')
+    const notes: ThemeNote[] = []
+    for (const row of parsed) {
+      const note = normalizeNote(
+        row && typeof row === 'object' ? (row as Record<string, unknown>).label : '',
+        row && typeof row === 'object' ? (row as Record<string, unknown>).text : '',
+      )
+      if (note) notes.push(note)
+    }
+    return notes
+  } catch (_error) {
+    return [{ label: '', text: raw.slice(0, MAX_NOTE_TEXT_LEN) }]
+  }
+}
+
+function stringifyThemeNotes(notes: ThemeNote[]): string {
+  const normalized = notes
+    .map(note => normalizeNote(note.label, note.text))
+    .filter((note): note is ThemeNote => note !== null)
+  if (normalized.length === 0) return ''
+
+  const json = JSON.stringify(normalized)
+  if (json.length <= MAX_MEMO_RAW_LEN) return json
+
+  // Fallback for oversize payloads while keeping legacy text compatibility.
+  return normalized
+    .map(note => [note.label, note.text].filter(Boolean).join('\n'))
+    .join('\n\n')
+    .slice(0, MAX_MEMO_RAW_LEN)
+}
+
+function parseMemoFromForm(form: FormData): string {
+  const memo = String(form.get('memo') ?? '')
+  const labels = form.getAll('note_labels[]')
+  const texts = form.getAll('note_texts[]')
+  if (labels.length === 0 && texts.length === 0) {
+    return memo
+  }
+
+  const maxLen = Math.max(labels.length, texts.length)
+  const notes: ThemeNote[] = []
+  for (let i = 0; i < maxLen; i += 1) {
+    const note = normalizeNote(labels[i], texts[i])
+    if (note) notes.push(note)
+  }
+  return stringifyThemeNotes(notes)
+}
+
 function analysisUrl(themeId: string, g: ThemeGranularity, from: string, to: string): string {
   const params = new URLSearchParams({ g, from, to })
   return `/themes/${themeId}?${params.toString()}`
@@ -66,6 +136,7 @@ function editorPage(
   const title = mode === 'new' ? 'テーマ新規作成' : 'テーマ編集'
   const action = mode === 'new' ? '/themes' : `/themes/${id}`
   const initial = encodeURIComponent(JSON.stringify(stocks))
+  const initialNotes = encodeURIComponent(JSON.stringify(parseThemeNotes(memo)))
 
   return (
     <div class="theme-form-wrap">
@@ -91,8 +162,8 @@ function editorPage(
               <input id="theme-name" class="input" type="text" name="name" value={name} maxlength={100} required />
             </div>
             <div>
-              <label class="fg-label" for="theme-memo">テーマメモ</label>
-              <textarea id="theme-memo" class="theme-memo-textarea" name="memo" maxlength={10000}>{memo}</textarea>
+              <label class="fg-label">分析ノート（ラベル + テキスト）</label>
+              <div class="theme-notes-root" data-initial={initialNotes} data-input-name="memo"></div>
             </div>
           </div>
         </div>
@@ -122,6 +193,7 @@ function editorPage(
         </div>
       </form>
 
+      <script src="/static/theme-notes.js"></script>
       <script src="/static/theme-form.js"></script>
     </div>
   )
@@ -199,7 +271,7 @@ themesRoute.post('/', async (c) => {
   const db = createDb(c.env.DATABASE_URL)
   const form = await c.req.formData()
   const name = String(form.get('name') ?? '')
-  const memo = String(form.get('memo') ?? '')
+  const memo = parseMemoFromForm(form)
   const codes = form.getAll('codes[]').map(v => String(v))
 
   try {
@@ -242,7 +314,7 @@ themesRoute.post('/:id', async (c) => {
   const db = createDb(c.env.DATABASE_URL)
   const form = await c.req.formData()
   const name = String(form.get('name') ?? '')
-  const memo = String(form.get('memo') ?? '')
+  const memo = parseMemoFromForm(form)
   const codes = form.getAll('codes[]').map(v => String(v))
 
   try {
@@ -281,7 +353,7 @@ themesRoute.post('/:id/delete', async (c) => {
 themesRoute.post('/:id/memo', async (c) => {
   const id = c.req.param('id')
   const form = await c.req.formData()
-  const memo = String(form.get('memo') ?? '')
+  const memo = parseMemoFromForm(form)
   const g = parseGranularity(String(form.get('g') ?? 'd'))
   const defaults = defaultDateRange()
   const fromRaw = String(form.get('from') ?? '')
@@ -315,6 +387,7 @@ themesRoute.get('/:id', async (c) => {
   const detail = await getThemeDetail(db, id)
   if (!detail) return c.notFound()
   const series = await listThemeSeries(db, detail.stocks, from, to, g)
+  const initialNotes = encodeURIComponent(JSON.stringify(parseThemeNotes(detail.theme.memo)))
   const encoded = encodeURIComponent(JSON.stringify({
     themeName: detail.theme.name,
     granularity: g,
@@ -392,12 +465,7 @@ themesRoute.get('/:id', async (c) => {
                 <input type="hidden" name="g" value={g} />
                 <input type="hidden" name="from" value={from} />
                 <input type="hidden" name="to" value={to} />
-                <textarea
-                  class="theme-memo-textarea"
-                  name="memo"
-                  maxlength={10000}
-                  placeholder="テーマ全体の検討メモを入力"
-                >{detail.theme.memo}</textarea>
+                <div class="theme-notes-root" data-initial={initialNotes} data-input-name="memo"></div>
                 <div class="theme-form-actions">
                   <button class="btn btn-primary" type="submit">保存</button>
                 </div>
@@ -408,6 +476,7 @@ themesRoute.get('/:id', async (c) => {
       </section>
 
       <div id="theme-analysis-data" data-payload={encoded}></div>
+      <script src="/static/theme-notes.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
       <script src="/static/theme-analysis.js"></script>
     </div>,

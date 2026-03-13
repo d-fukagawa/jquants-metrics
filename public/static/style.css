@@ -497,6 +497,52 @@ tbody tr:hover { background: var(--muted); }
   font-size: 13px;
 }
 
+.theme-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.theme-note-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--background);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.theme-note-label {
+  height: 36px;
+  font-size: 13px;
+}
+
+.theme-note-text {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  resize: vertical;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.theme-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.theme-note-footer {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-start;
+}
+
 .theme-stock-search {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -615,6 +661,10 @@ tbody tr:hover { background: var(--muted); }
   min-height: 540px;
 }
 
+.theme-memo-panel .theme-note-text {
+  min-height: 180px;
+}
+
 .theme-price-axis-tools {
   display: inline-flex;
   align-items: center;
@@ -679,5 +729,9 @@ tbody tr:hover { background: var(--muted); }
 
   .theme-memo-panel .theme-memo-textarea {
     min-height: 220px;
+  }
+
+  .theme-memo-panel .theme-note-text {
+    min-height: 140px;
   }
 }
