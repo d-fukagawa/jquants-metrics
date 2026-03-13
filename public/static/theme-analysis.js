@@ -54,7 +54,7 @@
     });
     const volData = categories.map((date) => {
       const bar = map.get(date);
-      return bar ? bar.volume : 0;
+      return bar ? bar.volume : null;
     });
     const closeData = categories
       .map((date) => {
@@ -212,9 +212,16 @@
     const assignment = calcAxisAssignment(preferDual, (model) => model.representativeVolume);
     const volumeSeries = stockModels.map((model) => ({
       name: model.name,
-      type: 'bar',
+      type: 'line',
       yAxisIndex: assignment.useDual ? (assignment.axisByCode.get(model.code) || 0) : 0,
       data: model.volData,
+      symbol: 'none',
+      showSymbol: false,
+      connectNulls: false,
+      lineStyle: {
+        width: 2,
+        color: model.color,
+      },
       itemStyle: { color: model.color },
     }));
 
@@ -233,7 +240,7 @@
       },
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'shadow' },
+        axisPointer: { type: 'cross' },
       },
       xAxis: {
         type: 'category',
