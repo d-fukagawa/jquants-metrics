@@ -13,6 +13,8 @@ import {
   updateTheme,
   updateThemeMemo,
 } from '../services/themeService'
+import analysisExportTemplate from '../templates/analysis-export.md?raw'
+import analysisPromptTemplate from '../templates/analysis-prompt.md?raw'
 
 export const themesRoute = new Hono<{ Bindings: Bindings }>()
 
@@ -421,6 +423,8 @@ themesRoute.get('/:id', async (c) => {
     })),
     priceChartPath: './images/price_chart.png',
     volumeChartPath: './images/volume_chart.png',
+    template: analysisExportTemplate,
+    analysisPrompt: analysisPromptTemplate,
   }))
   const encoded = encodeURIComponent(JSON.stringify({
     themeName: detail.theme.name,
