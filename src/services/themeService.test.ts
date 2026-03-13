@@ -76,10 +76,13 @@ describe('themeService CRUD', () => {
   })
 
   it('createTheme inserts theme and theme_stocks', async () => {
-    const values = vi.fn().mockResolvedValue(undefined)
-    const insert = vi.fn().mockReturnValue({ values })
-    const tx = { insert } as any
-    const transaction = vi.fn(async (cb: (db: any) => Promise<unknown>) => cb(tx))
+    const insertThemeValues = vi.fn().mockResolvedValue(undefined)
+    const insertStocksValues = vi.fn().mockResolvedValue(undefined)
+    const insert = vi.fn()
+      .mockReturnValueOnce({ values: insertThemeValues })
+      .mockReturnValueOnce({ values: insertStocksValues })
+    const whereForDelete = vi.fn().mockResolvedValue(undefined)
+    const deleteFn = vi.fn().mockReturnValue({ where: whereForDelete })
 
     const where = vi.fn().mockResolvedValue([{ code: '72030' }, { code: '67580' }])
     const from = vi.fn().mockReturnValue({ where })
@@ -87,7 +90,7 @@ describe('themeService CRUD', () => {
 
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('theme-1')
 
-    const db = { select, transaction } as unknown as Db
+    const db = { select, insert, delete: deleteFn } as unknown as Db
     const id = await createTheme(db, {
       name: 'テーマA',
       memo: '',
@@ -97,22 +100,41 @@ describe('themeService CRUD', () => {
     expect(insert).toHaveBeenCalledTimes(2)
   })
 
+  it('createTheme deletes theme when stock insert fails', async () => {
+    const insertThemeValues = vi.fn().mockResolvedValue(undefined)
+    const insertStocksValues = vi.fn().mockRejectedValue(new Error('insert failed'))
+    const insert = vi.fn()
+      .mockReturnValueOnce({ values: insertThemeValues })
+      .mockReturnValueOnce({ values: insertStocksValues })
+    const whereForDelete = vi.fn().mockResolvedValue(undefined)
+    const deleteFn = vi.fn().mockReturnValue({ where: whereForDelete })
+
+    const where = vi.fn().mockResolvedValue([{ code: '72030' }])
+    const from = vi.fn().mockReturnValue({ where })
+    const select = vi.fn().mockReturnValue({ from })
+
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('theme-rollback')
+
+    const db = { select, insert, delete: deleteFn } as unknown as Db
+    await expect(createTheme(db, {
+      name: 'テーマA',
+      memo: '',
+      codes: ['7203'],
+    })).rejects.toThrow('insert failed')
+
+    expect(deleteFn).toHaveBeenCalledTimes(1)
+  })
+
   it('updateTheme returns false when target theme does not exist', async () => {
     const returning = vi.fn().mockResolvedValue([])
     const whereForUpdate = vi.fn().mockReturnValue({ returning })
     const set = vi.fn().mockReturnValue({ where: whereForUpdate })
     const update = vi.fn().mockReturnValue({ set })
-    const tx = {
-      update,
-      delete: vi.fn(),
-      insert: vi.fn(),
-    }
-    const transaction = vi.fn(async (cb: (db: any) => Promise<unknown>) => cb(tx))
 
     const where = vi.fn().mockResolvedValue([{ code: '72030' }])
     const from = vi.fn().mockReturnValue({ where })
     const select = vi.fn().mockReturnValue({ from })
-    const db = { select, transaction } as unknown as Db
+    const db = { select, update } as unknown as Db
 
     const ok = await updateTheme(db, 'missing-id', {
       name: 'テーマA',
@@ -128,9 +150,7 @@ describe('themeService CRUD', () => {
     const del = vi.fn()
       .mockReturnValueOnce({ where: vi.fn().mockResolvedValue(undefined) })
       .mockReturnValueOnce({ where: themeWhere })
-    const tx = { delete: del }
-    const transaction = vi.fn(async (cb: (db: any) => Promise<unknown>) => cb(tx))
-    const db = { transaction } as unknown as Db
+    const db = { delete: del } as unknown as Db
 
     await expect(deleteTheme(db, 'theme-1')).resolves.toBe(true)
     expect(del).toHaveBeenCalledTimes(2)

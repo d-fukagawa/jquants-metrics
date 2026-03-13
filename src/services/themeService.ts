@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, inArray, lte, notInArray, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { dailyPrices, stockMaster, themeStocks, themes } from '../db/schema'
 import { parseCode4, toCode4, toCode5 } from '../utils/stockCode'
@@ -182,15 +182,16 @@ export async function createTheme(db: Db, input: ThemeInput): Promise<string> {
   const now = new Date()
   const themeId = crypto.randomUUID()
 
-  await db.transaction(async (tx) => {
-    await tx.insert(themes).values({
-      id: themeId,
-      name: normalized.name,
-      memo: normalized.memo,
-      createdAt: now,
-      updatedAt: now,
-    })
-    await tx.insert(themeStocks).values(
+  await db.insert(themes).values({
+    id: themeId,
+    name: normalized.name,
+    memo: normalized.memo,
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  try {
+    await db.insert(themeStocks).values(
       normalized.codes5.map((code, i) => ({
         themeId,
         code,
@@ -198,7 +199,11 @@ export async function createTheme(db: Db, input: ThemeInput): Promise<string> {
         createdAt: now,
       })),
     )
-  })
+  } catch (error) {
+    // Best-effort rollback for non-transaction drivers (neon-http).
+    await db.delete(themes).where(eq(themes.id, themeId))
+    throw error
+  }
 
   return themeId
 }
@@ -208,20 +213,20 @@ export async function updateTheme(db: Db, themeId: string, input: ThemeInput): P
   await ensureStocksExist(db, normalized.codes5)
   const now = new Date()
 
-  return db.transaction(async (tx) => {
-    const updated = await tx
-      .update(themes)
-      .set({
-        name: normalized.name,
-        memo: normalized.memo,
-        updatedAt: now,
-      })
-      .where(eq(themes.id, themeId))
-      .returning({ id: themes.id })
-    if (updated.length === 0) return false
+  const updated = await db
+    .update(themes)
+    .set({
+      name: normalized.name,
+      memo: normalized.memo,
+      updatedAt: now,
+    })
+    .where(eq(themes.id, themeId))
+    .returning({ id: themes.id })
+  if (updated.length === 0) return false
 
-    await tx.delete(themeStocks).where(eq(themeStocks.themeId, themeId))
-    await tx.insert(themeStocks).values(
+  await db
+    .insert(themeStocks)
+    .values(
       normalized.codes5.map((code, i) => ({
         themeId,
         code,
@@ -229,8 +234,21 @@ export async function updateTheme(db: Db, themeId: string, input: ThemeInput): P
         createdAt: now,
       })),
     )
-    return true
-  })
+    .onConflictDoUpdate({
+      target: [themeStocks.themeId, themeStocks.code],
+      set: {
+        sortOrder: sql`excluded.sort_order`,
+      },
+    })
+
+  await db
+    .delete(themeStocks)
+    .where(and(
+      eq(themeStocks.themeId, themeId),
+      notInArray(themeStocks.code, normalized.codes5),
+    ))
+
+  return true
 }
 
 export async function updateThemeMemo(db: Db, themeId: string, memo: string): Promise<boolean> {
@@ -247,14 +265,12 @@ export async function updateThemeMemo(db: Db, themeId: string, memo: string): Pr
 }
 
 export async function deleteTheme(db: Db, themeId: string): Promise<boolean> {
-  return db.transaction(async (tx) => {
-    await tx.delete(themeStocks).where(eq(themeStocks.themeId, themeId))
-    const deleted = await tx
-      .delete(themes)
-      .where(eq(themes.id, themeId))
-      .returning({ id: themes.id })
-    return deleted.length > 0
-  })
+  await db.delete(themeStocks).where(eq(themeStocks.themeId, themeId))
+  const deleted = await db
+    .delete(themes)
+    .where(eq(themes.id, themeId))
+    .returning({ id: themes.id })
+  return deleted.length > 0
 }
 
 function weekStartMonday(date: string): string {
