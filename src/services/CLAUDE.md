@@ -11,6 +11,7 @@ DB アクセスと計算ロジックを担当し、HTTP の知識を持たない
 | `priceService.ts` | 日足株価の取得（直近 N 日）|
 | `financialService.ts` | PER/PBR/ROE の計算 |
 | `syncService.ts` | JQuants API → Neon DB へのデータ同期 |
+| `themeService.ts` | テーマCRUD・銘柄集計・日足/週足/月足変換 |
 
 ## パターン
 

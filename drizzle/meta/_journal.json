@@ -43,6 +43,13 @@
       "when": 1773403563948,
       "tag": "0005_stock_memo_refactor",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773411187027,
+      "tag": "0006_tiresome_punisher",
+      "breakpoints": true
     }
   ]
 }

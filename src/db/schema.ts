@@ -230,3 +230,26 @@ export const stockMemos = pgTable('stock_memos', {
   index('idx_stock_memos_code').on(t.code),
   index('idx_stock_memos_updated_at').on(t.updatedAt),
 ])
+
+// テーマ本体（単一ユーザー前提）
+export const themes = pgTable('themes', {
+  id:        text('id').primaryKey(),
+  name:      text('name').notNull(),
+  memo:      text('memo').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  index('idx_themes_updated_at').on(t.updatedAt),
+])
+
+// テーマ内の銘柄（順序あり）
+export const themeStocks = pgTable('theme_stocks', {
+  themeId:   text('theme_id').notNull(),
+  code:      varchar('code', { length: 5 }).notNull(),
+  sortOrder: integer('sort_order').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.themeId, t.code] }),
+  index('idx_theme_stocks_theme_sort').on(t.themeId, t.sortOrder),
+  index('idx_theme_stocks_code').on(t.code),
+])

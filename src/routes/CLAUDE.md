@@ -10,6 +10,7 @@ Hono のルートハンドラを実装するディレクトリ。
 | `home.tsx` | `GET /` | 銘柄検索ページ（SSR HTML） |
 | `stock.tsx` | `GET /stock/:code` | 銘柄分析ページ（株価チャート + 指標カード） |
 | `sync.ts` | `POST /api/sync` | JQuants → Neon データ同期（`X-Sync-Secret` 認証） |
+| `themes.tsx` | `GET /themes` ほか | テーマ一覧・新規/編集・分析画面 |
 
 ## パターン
 
