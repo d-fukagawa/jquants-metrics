@@ -55,15 +55,12 @@
         const card = document.createElement('div');
         card.className = 'theme-note-card';
 
-        const label = document.createElement('label');
-        label.className = 'fg-label';
-        label.textContent = `ラベル ${index + 1}`;
-
         const labelInput = document.createElement('input');
         labelInput.type = 'text';
         labelInput.className = 'input theme-note-label';
+        labelInput.setAttribute('aria-label', 'ラベル');
         labelInput.maxLength = 100;
-        labelInput.placeholder = '例: 仮説 / 懸念 / 追跡指標';
+        labelInput.placeholder = 'ラベル（例: 仮説 / 懸念 / 追跡指標）';
         labelInput.value = note.label || '';
         labelInput.addEventListener('input', () => {
           notes[index].label = labelInput.value;
@@ -72,6 +69,7 @@
 
         const textArea = document.createElement('textarea');
         textArea.className = 'theme-note-text';
+        textArea.setAttribute('aria-label', 'テキスト');
         textArea.maxLength = 5000;
         textArea.placeholder = 'ノート内容を入力';
         textArea.value = note.text || '';
@@ -128,7 +126,6 @@
         actions.appendChild(downBtn);
         actions.appendChild(removeBtn);
 
-        card.appendChild(label);
         card.appendChild(labelInput);
         card.appendChild(textArea);
         card.appendChild(actions);

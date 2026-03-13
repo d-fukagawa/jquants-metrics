@@ -21,6 +21,8 @@ type ThemeNote = {
   text: string
 }
 
+type AnalysisViewMode = 'edit' | 'input'
+
 const MAX_NOTE_LABEL_LEN = 100
 const MAX_NOTE_TEXT_LEN = 5000
 const MAX_MEMO_RAW_LEN = 10_000
@@ -49,6 +51,17 @@ function fmtDateTime(dt: Date): string {
 function parseGranularity(raw: string | undefined): ThemeGranularity {
   if (raw === 'w' || raw === 'm') return raw
   return 'd'
+}
+
+function parseAnalysisView(raw: string | undefined): AnalysisViewMode {
+  if (raw === 'input') return 'input'
+  return 'edit'
+}
+
+function granularityLabel(g: ThemeGranularity): string {
+  if (g === 'w') return '週足'
+  if (g === 'm') return '月足'
+  return '日足'
 }
 
 function normalizeNote(labelRaw: unknown, textRaw: unknown): ThemeNote | null {
@@ -112,8 +125,11 @@ function parseMemoFromForm(form: FormData): string {
   return stringifyThemeNotes(notes)
 }
 
-function analysisUrl(themeId: string, g: ThemeGranularity, from: string, to: string): string {
+function analysisUrl(themeId: string, g: ThemeGranularity, from: string, to: string, view: AnalysisViewMode = 'edit'): string {
   const params = new URLSearchParams({ g, from, to })
+  if (view === 'input') {
+    params.set('view', 'input')
+  }
   return `/themes/${themeId}?${params.toString()}`
 }
 
@@ -355,6 +371,7 @@ themesRoute.post('/:id/memo', async (c) => {
   const form = await c.req.formData()
   const memo = parseMemoFromForm(form)
   const g = parseGranularity(String(form.get('g') ?? 'd'))
+  const view = parseAnalysisView(String(form.get('view') ?? 'edit'))
   const defaults = defaultDateRange()
   const fromRaw = String(form.get('from') ?? '')
   const toRaw = String(form.get('to') ?? '')
@@ -364,7 +381,7 @@ themesRoute.post('/:id/memo', async (c) => {
   const db = createDb(c.env.DATABASE_URL)
   const ok = await updateThemeMemo(db, id, memo)
   if (!ok) return c.notFound()
-  return c.redirect(analysisUrl(id, g, from <= to ? from : defaults.from, from <= to ? to : defaults.to), 303)
+  return c.redirect(analysisUrl(id, g, from <= to ? from : defaults.from, from <= to ? to : defaults.to, view), 303)
 })
 
 themesRoute.get('/:id', async (c) => {
@@ -372,6 +389,7 @@ themesRoute.get('/:id', async (c) => {
   const qFrom = c.req.query('from')
   const qTo = c.req.query('to')
   const g = parseGranularity(c.req.query('g'))
+  const view = parseAnalysisView(c.req.query('view'))
   const defaults = defaultDateRange()
   const from = qFrom ?? defaults.from
   const to = qTo ?? defaults.to
@@ -387,7 +405,8 @@ themesRoute.get('/:id', async (c) => {
   const detail = await getThemeDetail(db, id)
   if (!detail) return c.notFound()
   const series = await listThemeSeries(db, detail.stocks, from, to, g)
-  const initialNotes = encodeURIComponent(JSON.stringify(parseThemeNotes(detail.theme.memo)))
+  const notes = parseThemeNotes(detail.theme.memo)
+  const initialNotes = encodeURIComponent(JSON.stringify(notes))
   const encoded = encodeURIComponent(JSON.stringify({
     themeName: detail.theme.name,
     granularity: g,
@@ -403,80 +422,172 @@ themesRoute.get('/:id', async (c) => {
         <div class="theme-header-actions">
           <a class="btn-sm" href="/themes">テーマ一覧</a>
           <a class="btn-sm" href={`/themes/${id}/edit`}>編集</a>
+          <div class="theme-view-switch">
+            <a class={`btn-sm${view === 'edit' ? ' active' : ''}`} href={analysisUrl(id, g, from, to, 'edit')}>編集ビュー</a>
+            <a class={`btn-sm${view === 'input' ? ' active' : ''}`} href={analysisUrl(id, g, from, to, 'input')}>参照ビュー</a>
+          </div>
         </div>
       </section>
 
-      <section class="card panel">
-        <div class="panel-body">
-          <form method="get" action={`/themes/${id}`} class="theme-analysis-controls">
-            <div class="theme-granularity-tabs">
-              <a class={`theme-granularity-tab${g === 'd' ? ' active' : ''}`} href={analysisUrl(id, 'd', from, to)}>日足</a>
-              <a class={`theme-granularity-tab${g === 'w' ? ' active' : ''}`} href={analysisUrl(id, 'w', from, to)}>週足</a>
-              <a class={`theme-granularity-tab${g === 'm' ? ' active' : ''}`} href={analysisUrl(id, 'm', from, to)}>月足</a>
-            </div>
-            <div class="theme-range-row">
-              <input class="input" type="date" name="from" value={from} />
-              <span class="range-sep">〜</span>
-              <input class="input" type="date" name="to" value={to} />
-              <input type="hidden" name="g" value={g} />
-              <button class="btn btn-primary" type="submit">反映</button>
-            </div>
-          </form>
-        </div>
-      </section>
-
-      <section class="theme-analysis-main">
-        <div class="theme-analysis-charts">
-          <section class="theme-chart-grid">
-            <div class="card panel">
-              <div class="panel-header">
-                <span class="panel-title">複数銘柄株価チャート</span>
-                <div class="theme-price-axis-tools">
-                  <label class="theme-axis-toggle" for="theme-price-dual-axis">
-                    <input id="theme-price-dual-axis" type="checkbox" checked />
-                    <span>二軸表示</span>
-                  </label>
-                  <span id="theme-price-axis-mode" class="theme-axis-mode">単軸</span>
-                </div>
-              </div>
-              <div class="panel-body">
-                <div id="theme-candlestick-chart" class="theme-chart"></div>
-              </div>
-            </div>
-            <div class="card panel">
-              <div class="panel-header">
-                <span class="panel-title">複数銘柄出来高グラフ</span>
-                <span id="theme-volume-axis-mode" class="theme-axis-mode">単軸</span>
-              </div>
-              <div class="panel-body">
-                <div id="theme-volume-chart" class="theme-chart theme-chart-volume"></div>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <aside class="theme-analysis-memo">
-          <section class="card panel theme-memo-panel">
-            <div class="panel-header">
-              <span class="panel-title">検討メモ</span>
-            </div>
+      {view === 'edit' ? (
+        <>
+          <section class="card panel">
             <div class="panel-body">
-              <form method="post" action={`/themes/${id}/memo`} class="theme-memo-form">
-                <input type="hidden" name="g" value={g} />
-                <input type="hidden" name="from" value={from} />
-                <input type="hidden" name="to" value={to} />
-                <div class="theme-notes-root" data-initial={initialNotes} data-input-name="memo"></div>
-                <div class="theme-form-actions">
-                  <button class="btn btn-primary" type="submit">保存</button>
+              <form method="get" action={`/themes/${id}`} class="theme-analysis-controls">
+                <div class="theme-granularity-tabs">
+                  <a class={`theme-granularity-tab${g === 'd' ? ' active' : ''}`} href={analysisUrl(id, 'd', from, to, view)}>日足</a>
+                  <a class={`theme-granularity-tab${g === 'w' ? ' active' : ''}`} href={analysisUrl(id, 'w', from, to, view)}>週足</a>
+                  <a class={`theme-granularity-tab${g === 'm' ? ' active' : ''}`} href={analysisUrl(id, 'm', from, to, view)}>月足</a>
+                </div>
+                <div class="theme-range-row">
+                  <input class="input" type="date" name="from" value={from} />
+                  <span class="range-sep">〜</span>
+                  <input class="input" type="date" name="to" value={to} />
+                  <input type="hidden" name="g" value={g} />
+                  <input type="hidden" name="view" value={view} />
+                  <button class="btn btn-primary" type="submit">反映</button>
                 </div>
               </form>
             </div>
           </section>
-        </aside>
-      </section>
+
+          <section class="theme-analysis-main">
+            <div class="theme-analysis-charts">
+              <section class="theme-chart-grid">
+                <div class="card panel">
+                  <div class="panel-header">
+                    <span class="panel-title">複数銘柄株価チャート</span>
+                    <div class="theme-price-axis-tools">
+                      <label class="theme-axis-toggle" for="theme-price-dual-axis">
+                        <input id="theme-price-dual-axis" type="checkbox" checked />
+                        <span>二軸表示</span>
+                      </label>
+                      <span id="theme-price-axis-mode" class="theme-axis-mode">単軸</span>
+                    </div>
+                  </div>
+                  <div class="panel-body">
+                    <div id="theme-candlestick-chart" class="theme-chart"></div>
+                  </div>
+                </div>
+                <div class="card panel">
+                  <div class="panel-header">
+                    <span class="panel-title">複数銘柄出来高グラフ</span>
+                    <span id="theme-volume-axis-mode" class="theme-axis-mode">単軸</span>
+                  </div>
+                  <div class="panel-body">
+                    <div id="theme-volume-chart" class="theme-chart theme-chart-volume"></div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <aside class="theme-analysis-memo">
+              <section class="card panel theme-memo-panel">
+                <div class="panel-header">
+                  <span class="panel-title">検討メモ</span>
+                </div>
+                <div class="panel-body">
+                  <form method="post" action={`/themes/${id}/memo`} class="theme-memo-form">
+                    <input type="hidden" name="g" value={g} />
+                    <input type="hidden" name="from" value={from} />
+                    <input type="hidden" name="to" value={to} />
+                    <input type="hidden" name="view" value={view} />
+                    <div class="theme-notes-root" data-initial={initialNotes} data-input-name="memo"></div>
+                    <div class="theme-form-actions">
+                      <button class="btn btn-primary" type="submit">保存</button>
+                    </div>
+                  </form>
+                </div>
+              </section>
+            </aside>
+          </section>
+        </>
+      ) : (
+        <section class="theme-analysis-stack">
+          <section class="card panel">
+            <div class="panel-header">
+              <span class="panel-title">ヘッダ</span>
+            </div>
+            <div class="panel-body">
+              <div class="theme-input-meta-grid">
+                <div class="theme-input-meta-item">
+                  <div class="theme-input-meta-label">テーマ名</div>
+                  <div class="theme-input-meta-value">{detail.theme.name}</div>
+                </div>
+                <div class="theme-input-meta-item">
+                  <div class="theme-input-meta-label">期間</div>
+                  <div class="theme-input-meta-value">{from} 〜 {to}</div>
+                </div>
+                <div class="theme-input-meta-item">
+                  <div class="theme-input-meta-label">粒度</div>
+                  <div class="theme-input-meta-value">{granularityLabel(g)}</div>
+                </div>
+                <div class="theme-input-meta-item">
+                  <div class="theme-input-meta-label">比較銘柄一覧</div>
+                  <div class="theme-compare-list">
+                    {detail.stocks.length === 0 ? (
+                      <span class="empty-state" style="padding:0;text-align:left">銘柄なし</span>
+                    ) : detail.stocks.map((stock) => (
+                      <span class="theme-compare-chip" key={stock.code}>
+                        {stock.coName ?? stock.code4} ({stock.code4})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card panel">
+            <div class="panel-header">
+              <span class="panel-title">分析ノート一覧</span>
+            </div>
+            <div class="panel-body">
+              {notes.length === 0 ? (
+                <p class="empty-state" style="padding:0;text-align:left">ノートはありません</p>
+              ) : (
+                <div class="theme-note-read-list">
+                  {notes.map((note, index) => (
+                    <article class="theme-note-read-item" key={`${index}-${note.label}`}>
+                      <h3 class="theme-note-read-title">{note.label || `ノート ${index + 1}`}</h3>
+                      <div class="theme-note-read-text">{note.text || '（内容なし）'}</div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section class="card panel">
+            <div class="panel-header">
+              <span class="panel-title">複数銘柄株価チャート</span>
+              <div class="theme-price-axis-tools">
+                <label class="theme-axis-toggle" for="theme-price-dual-axis">
+                  <input id="theme-price-dual-axis" type="checkbox" checked />
+                  <span>二軸表示</span>
+                </label>
+                <span id="theme-price-axis-mode" class="theme-axis-mode">単軸</span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="theme-candlestick-chart" class="theme-chart"></div>
+            </div>
+          </section>
+
+          <section class="card panel">
+            <div class="panel-header">
+              <span class="panel-title">複数銘柄出来高グラフ</span>
+              <span id="theme-volume-axis-mode" class="theme-axis-mode">単軸</span>
+            </div>
+            <div class="panel-body">
+              <div id="theme-volume-chart" class="theme-chart theme-chart-volume"></div>
+            </div>
+          </section>
+        </section>
+      )}
 
       <div id="theme-analysis-data" data-payload={encoded}></div>
-      <script src="/static/theme-notes.js"></script>
+      {view === 'edit' && <script src="/static/theme-notes.js"></script>}
       <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
       <script src="/static/theme-analysis.js"></script>
     </div>,

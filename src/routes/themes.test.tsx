@@ -111,6 +111,38 @@ describe('themesRoute', () => {
     expect(html).toContain('/static/theme-analysis.js')
   })
 
+  it('GET /:id with view=input renders single-column reference view', async () => {
+    vi.mocked(themeService.getThemeDetail).mockResolvedValue({
+      theme: {
+        id: 'theme-1',
+        name: '光デバイス',
+        memo: JSON.stringify([{ label: '仮説', text: '需要はQ3がピーク想定' }]),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      stocks: [
+        { themeId: 'theme-1', code: '72030', code4: '7203', sortOrder: 0, coName: 'トヨタ自動車', mktNm: 'プライム' },
+      ],
+    })
+    vi.mocked(themeService.listThemeSeries).mockResolvedValue([
+      {
+        code: '72030',
+        code4: '7203',
+        name: 'トヨタ自動車',
+        bars: [{ date: '2026-03-01', open: 100, high: 110, low: 90, close: 105, volume: 1000 }],
+      },
+    ])
+
+    const res = await themesRoute.request('/theme-1?g=d&from=2026-01-01&to=2026-03-10&view=input', { method: 'GET' }, ENV)
+    const html = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(html).toContain('参照ビュー')
+    expect(html).toContain('分析ノート一覧')
+    expect(html).toContain('需要はQ3がピーク想定')
+    expect(html).not.toContain('/static/theme-notes.js')
+  })
+
   it('GET /:id returns 400 for invalid date range', async () => {
     const res = await themesRoute.request('/theme-1?from=2026-03-10&to=2026-01-01', { method: 'GET' }, ENV)
     expect(res.status).toBe(400)
@@ -138,6 +170,25 @@ describe('themesRoute', () => {
 
     expect(res.status).toBe(303)
     expect(res.headers.get('Location')).toBe('/themes/theme-1?g=w&from=2026-01-01&to=2026-03-01')
+  })
+
+  it('POST /:id/memo preserves input view in redirect', async () => {
+    vi.mocked(themeService.updateThemeMemo).mockResolvedValue(true)
+    const form = new URLSearchParams({
+      memo: 'updated memo',
+      g: 'd',
+      from: '2026-01-01',
+      to: '2026-03-01',
+      view: 'input',
+    })
+    const res = await themesRoute.request('/theme-1/memo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    }, ENV)
+
+    expect(res.status).toBe(303)
+    expect(res.headers.get('Location')).toBe('/themes/theme-1?g=d&from=2026-01-01&to=2026-03-01&view=input')
   })
 
   it('POST /:id/delete deletes and redirects', async () => {
