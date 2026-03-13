@@ -1,63 +1,71 @@
-# リファクタリング実施レポート（2026-03-13）
+# リファクタリング実施レポート（更新版）
 
-## 目的
-- プロジェクト全体で散在していた重複ロジック（コード正規化・数値変換・日付列挙・upsert前整形）を共通化し、保守性を向上。
-- 既存挙動を維持したまま、ルート層とサービス層の責務を明確化。
+最終更新: 2026-03-13
 
-## 実施内容
+## 1. 目的
 
-### 1. 共通ユーティリティ追加
+- 重複ロジックの共通化
+- ルート層とサービス層の責務分離
+- 新機能（テーマ分析3画面）追加時の保守性確保
+
+## 2. 実施済みリファクタリング
+
+### 2.1 共通ユーティリティ
+
 - `src/utils/stockCode.ts`
-  - 4桁コード正規化/検証、4桁⇄5桁変換を集約。
+  - 4桁/5桁コード変換・正規化を一元化
 - `src/utils/number.ts`
-  - 数値パース（`null/undefined/空文字`安全対応）と nullable string 変換を集約。
+  - nullable 値の安全な数値パース
 - `src/utils/date.ts`
-  - `YYYY-MM-DD` の包含日付列挙を共通化。
+  - 日付列挙処理を共通化
 
-### 2. ルート層の重複整理
-- `src/routes/sync.ts`
-  - 4桁コード検証を共通関数化。
-  - `prices` 同期の既定日付を `syncService` 側定数参照に統一。
-  - `code + '0'` の直書きを `toCode5()` へ統一。
-- `src/routes/watchlist.tsx`
-  - 4桁コード処理を共通ユーティリティに置換。
-- `src/routes/stock.tsx`
-  - `:code` 検証・5桁化・表示4桁化を共通ユーティリティへ統一。
-- `src/routes/home.tsx`
-  - コード表示処理を `toCode4()` に統一。
-- `src/routes/screen.tsx`
-  - クエリ数値パースを `parseOptionalNumber()` に統一。
-  - ページングURL生成の数値パラメータ処理をループ化して重複削減。
-- `src/routes/timeline.tsx`, `src/routes/alpha.tsx`
-  - 数値パースとコード正規化処理を共通ユーティリティへ寄せた。
+### 2.2 ルート層の整理
 
-### 3. サービス層の整理
-- `src/services/syncService.ts`
-  - 日足データ整形/UPSERT処理を `mapDailyPriceRow` + `upsertDailyPriceRows` に共通化。
-  - 既定日付を `DEFAULT_PRICE_SYNC_FROM/TO` として明示化。
-  - nullable string 変換を共通ユーティリティへ移行。
-  - 日付列挙処理を `enumerateDates()` 利用へ変更。
-- `src/services/financialService.ts`
-  - 数値変換を `parseNumber()` に統一し、内部重複を削減。
-- `src/services/edinetSyncService.ts`
-  - nullable string 変換を共通化。
-- `src/services/stockEdinetService.ts`
-  - 数値変換を共通化。
-  - `timeline` のコードフィルタに共通コード正規化を適用。
-- `src/services/stockService.ts`
-  - `getStockByCode` を `ilike` から `eq` に変更（完全一致検索の意図を明確化）。
-- `src/services/syncStatusService.ts`
-  - 単一行取得ヘルパーを導入。
-  - 集計SQLを `Promise.all` で並列化し、可読性と実行効率を改善。
+- `sync`, `watchlist`, `stock`, `home`, `screen`, `timeline`, `alpha`
+  - 直接実装していたコード正規化/数値パースを共通関数へ寄せた
+  - ルートは HTTP 入出力とオーケストレーションに限定
 
-### 4. テスト追加
-- `src/utils/stockCode.test.ts`
-- `src/utils/number.test.ts`
-- `src/utils/date.test.ts`
+### 2.3 サービス層の整理
 
-## 検証結果
-- `npm run test`: **成功**（22 files, 177 tests passed）
-- `npm run build`: **成功**
+- `syncService`
+  - 日足整形/upsertロジックの共通化
+- `financialService`, `stockEdinetService`
+  - 数値変換処理の統一
+- `syncStatusService`
+  - 集計ロジックの整理と並列化
 
-## 備考
-- 既存の未コミット変更は維持したまま、今回のリファクタリングを追加実施。
+### 2.4 テーマ機能追加に伴う構造化（2026-03-13）
+
+- 新規テーブル
+  - `themes`
+  - `theme_stocks`
+- 新規サービス
+  - `themeService`（CRUD + 入力検証 + 日足/週足/月足再集計）
+- 新規ルート
+  - `themesRoute`（一覧/新規/編集/分析/メモ保存/削除）
+- 新規フロントスクリプト
+  - `public/static/theme-form.js`
+  - `public/static/theme-analysis.js`
+
+## 3. テスト
+
+- 既存テスト: 回帰なし
+- 新規テスト追加:
+  - `src/services/themeService.test.ts`
+  - `src/routes/themes.test.tsx`
+
+実行結果（最新）:
+
+- `npm run test`: 25 files, 205 tests passed
+- `npm run build`: success
+
+## 4. 運用改善
+
+- Windows PowerShell でのデプロイ失敗（`$npm_execpath`）対策として、
+  `npx wrangler pages deploy dist` を標準手順に統一。
+- `.codex/prompts/deploy-pages-windows.md` を追加し、再発を回避。
+
+## 5. 備考
+
+- このレポートは「実施済み変更の要約」。
+- 今後の未完了事項は `doc/todo.md`、全体方針は `doc/plan.md` を参照。
