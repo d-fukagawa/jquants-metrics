@@ -17,14 +17,10 @@ import {
   fetchTextAnomalyScore,
   searchCompanyByCode,
 } from '../edinet/client'
+import { toNullableString } from '../utils/number'
 
 function nowIso() {
   return new Date().toISOString()
-}
-
-function toNum(v: string | null | undefined): string | null {
-  if (v == null || v === '') return null
-  return v
 }
 
 async function startRun(db: Db, target: string): Promise<string> {
@@ -157,10 +153,10 @@ export async function syncEdinetForecasts(db: Db, apiKey: string, code5: string)
       edinetCode,
       fiscalYear: f.fiscalYear,
       horizon: f.horizon,
-      salesForecast: toNum(f.salesForecast),
-      opForecast: toNum(f.opForecast),
-      npForecast: toNum(f.npForecast),
-      epsForecast: toNum(f.epsForecast),
+      salesForecast: toNullableString(f.salesForecast),
+      opForecast: toNullableString(f.opForecast),
+      npForecast: toNullableString(f.npForecast),
+      epsForecast: toNullableString(f.epsForecast),
       disclosedAt: f.disclosedAt ?? null,
       sourceDocId: f.sourceDocId ?? null,
       updatedAt: new Date(),
@@ -205,11 +201,11 @@ export async function syncEdinetBridge(db: Db, apiKey: string, code5: string): P
       edinetCode,
       fiscalYear: f.fiscalYear,
       periodType: f.periodType,
-      operatingProfit: toNum(f.operatingProfit),
-      pretaxProfit: toNum(f.pretaxProfit),
-      netProfit: toNum(f.netProfit),
-      cfo: toNum(f.cfo),
-      depreciation: toNum(f.depreciation),
+      operatingProfit: toNullableString(f.operatingProfit),
+      pretaxProfit: toNullableString(f.pretaxProfit),
+      netProfit: toNullableString(f.netProfit),
+      cfo: toNullableString(f.cfo),
+      depreciation: toNullableString(f.depreciation),
       adjustmentItemsJson: f.adjustmentItems ?? {},
       disclosedAt: f.disclosedAt ?? null,
       sourceDocId: f.sourceDocId ?? null,
@@ -304,4 +300,3 @@ export async function syncEdinetTextScores(db: Db, apiKey: string, code5: string
     throw e
   }
 }
-

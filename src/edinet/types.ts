@@ -35,9 +35,12 @@ export interface EdinetBridgeFact {
   periodType: string
   operatingProfit?: string | null
   pretaxProfit?: string | null
+  taxExpense?: string | null
   netProfit?: string | null
   cfo?: string | null
   depreciation?: string | null
+  debtCurrent?: string | null
+  debtNonCurr?: string | null
   disclosedAt?: string | null
   sourceDocId?: string | null
   adjustmentItems?: Record<string, unknown> | null
@@ -50,4 +53,3 @@ export interface EdinetScore {
   formulaText: string
   components: Record<string, unknown>
 }
-

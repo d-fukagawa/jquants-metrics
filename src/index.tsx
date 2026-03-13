@@ -6,8 +6,12 @@ import { stockRoute }  from './routes/stock'
 import { syncRoute }   from './routes/sync'
 import { screenRoute } from './routes/screen'
 import { syncStatusRoute } from './routes/syncStatus'
+import { timelineRoute } from './routes/timeline'
+import { alphaRoute } from './routes/alpha'
+import { watchlistRoute } from './routes/watchlist'
 import { createDb }    from './db/client'
 import { syncStockMaster, syncDailyPricesAll } from './services/syncService'
+import { enumerateDates } from './utils/date'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -18,6 +22,9 @@ app.route('/stock',    stockRoute)
 app.route('/api/sync', syncRoute)
 app.route('/screen',   screenRoute)
 app.route('/sync-status', syncStatusRoute)
+app.route('/timeline', timelineRoute)
+app.route('/alpha', alphaRoute)
+app.route('/watchlist', watchlistRoute)
 
 export default {
   fetch: app.fetch.bind(app),
@@ -33,10 +40,7 @@ export default {
     const weekAgo = new Date(today)
     weekAgo.setDate(weekAgo.getDate() - 7)
     const fromStr = weekAgo.toISOString().slice(0, 10)
-    const dates: string[] = []
-    for (const d = new Date(fromStr); d <= new Date(todayStr); d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().slice(0, 10))
-    }
+    const dates = enumerateDates(fromStr, todayStr)
 
     ctx.waitUntil((async () => {
       await syncStockMaster(db, env.JQUANTS_API_KEY)

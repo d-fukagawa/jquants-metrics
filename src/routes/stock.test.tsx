@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { stockRoute } from './stock'
 import * as stockService    from '../services/stockService'
 import * as priceService    from '../services/priceService'
+import * as stockEdinetService from '../services/stockEdinetService'
+import * as watchlistService from '../services/watchlistService'
 // calcMetrics / fmtJpy は純粋関数なので実装をそのまま使う
 vi.mock('../services/financialService', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../services/financialService')>()
@@ -16,11 +18,15 @@ import * as financialService from '../services/financialService'
 
 vi.mock('../services/stockService')
 vi.mock('../services/priceService')
+vi.mock('../services/stockEdinetService')
+vi.mock('../services/watchlistService')
 vi.mock('../db/client', () => ({ createDb: vi.fn().mockReturnValue({}) }))
 
 const ENV = {
   DATABASE_URL:    'postgres://test',
   JQUANTS_API_KEY: 'key',
+  EDINETDB_API_KEY: 'edinet-key',
+  EDINET_API_KEY: 'official-edinet-key',
   SYNC_SECRET:     'secret',
 }
 
@@ -63,7 +69,7 @@ async function get(path: string) {
 // ---------- バリデーション ----------
 describe('GET /stock/:code — validation', () => {
   it('returns 400 for non-4-digit code', async () => {
-    const cases = ['abc', '123', '12345', '720a', '7203x']
+    const cases = ['abc', '123', '12345', '72-3', '7203x']
     for (const code of cases) {
       const res = await get(`/${code}`)
       expect(res.status, `code="${code}" should be rejected`).toBe(400)
@@ -80,6 +86,12 @@ describe('GET /stock/:code — not found', () => {
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue([])
     vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
     vi.mocked(financialService.getFinancialAdjustmentsLatest).mockResolvedValue([])
+    vi.mocked(stockEdinetService.getDisclosureTimeline).mockResolvedValue([])
+    vi.mocked(stockEdinetService.getLatestForecasts).mockResolvedValue({ next: null, next2: null })
+    vi.mocked(stockEdinetService.getLatestBridgeFact).mockResolvedValue(null)
+    vi.mocked(stockEdinetService.getLatestQualityScore).mockResolvedValue(null)
+    vi.mocked(stockEdinetService.getLatestTextScore).mockResolvedValue(null)
+    vi.mocked(watchlistService.getStockMemoPanel).mockResolvedValue({ isWatched: false, notes: [] } as any)
   })
 
   it('returns 404 when stock not found in DB', async () => {
@@ -97,6 +109,74 @@ describe('GET /stock/:code — found', () => {
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue(FINANCIALS as any)
     vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
     vi.mocked(financialService.getFinancialAdjustmentsLatest).mockResolvedValue([])
+    vi.mocked(stockEdinetService.getDisclosureTimeline).mockResolvedValue([{
+      edinetCode: 'E00001',
+      docId: 'DOC1',
+      code: '72030',
+      filingDate: '2026-02-14',
+      eventType: '決算短信',
+      title: '2026年3月期 第3四半期決算短信',
+      isAmendment: false,
+      submittedAt: null,
+      sourceUpdatedAt: null,
+    }] as any)
+    vi.mocked(stockEdinetService.getLatestForecasts).mockResolvedValue({
+      next: {
+        code: '72030',
+        edinetCode: 'E00001',
+        fiscalYear: '2027-03',
+        horizon: 'next',
+        salesForecast: '46000000000000',
+        opForecast: '5100000000000',
+        npForecast: '4100000000000',
+        epsForecast: '382.1',
+        disclosedAt: '2026-02-14',
+        sourceDocId: 'DOC1',
+        updatedAt: new Date(),
+      },
+      next2: null,
+    } as any)
+    vi.mocked(stockEdinetService.getLatestBridgeFact).mockResolvedValue({
+      code: '72030',
+      edinetCode: 'E00001',
+      fiscalYear: '2026-03',
+      periodType: 'FY',
+      operatingProfit: '5000000000000',
+      pretaxProfit: '5200000000000',
+      netProfit: '4000000000000',
+      cfo: '4210000000000',
+      depreciation: '1300000000000',
+      adjustmentItemsJson: {},
+      disclosedAt: '2026-02-14',
+      sourceDocId: 'DOC1',
+      updatedAt: new Date(),
+    } as any)
+    vi.mocked(stockEdinetService.getLatestQualityScore).mockResolvedValue({
+      code: '72030',
+      asOfDate: '2026-02-14',
+      qualityScore: 78,
+      componentsJson: { cfo_gap_penalty: 12 },
+      formulaText: 'quality_score = 100 - penalties',
+      updatedAt: new Date(),
+    } as any)
+    vi.mocked(stockEdinetService.getLatestTextScore).mockResolvedValue({
+      code: '72030',
+      asOfDate: '2026-02-14',
+      anomalyScore: 34,
+      componentsJson: { risk_terms_delta: 2.1 },
+      formulaText: 'anomaly_score = normalized(text delta)',
+      updatedAt: new Date(),
+    } as any)
+    vi.mocked(watchlistService.getStockMemoPanel).mockResolvedValue({
+      isWatched: true,
+      notes: [{
+        id: 'memo-1',
+        code: '72030',
+        body: 'existing memo',
+        createdAt: new Date('2026-02-01T00:00:00Z'),
+        updatedAt: new Date('2026-02-02T00:00:00Z'),
+      }],
+    } as any)
   })
 
   it('returns 200', async () => {
@@ -181,6 +261,22 @@ describe('GET /stock/:code — found', () => {
     expect(html).toContain('調整後EBITDA（model）')
     expect(html).toContain('調整後EBITDA 算出状態')
   })
+
+  it('renders EDINET sections and tooltip marker', async () => {
+    const html = await (await get('/7203')).text()
+    expect(html).toContain('EDINET 開示タイムライン')
+    expect(html).toContain('会社予想スナップショット')
+    expect(html).toContain('会計調整ブリッジ')
+    expect(html).toContain('会計品質スコア')
+    expect(html).toContain('テキスト異常スコア')
+    expect(html).toContain('ⓘ')
+  })
+
+  it('renders watchlist control', async () => {
+    const html = await (await get('/7203')).text()
+    expect(html).toContain('ウォッチ解除')
+    expect(html).toContain('メモ一覧')
+  })
 })
 
 // ---------- データなし ----------
@@ -192,6 +288,12 @@ describe('GET /stock/:code — empty prices / financials', () => {
     vi.mocked(financialService.getLatestFinancials).mockResolvedValue([])
     vi.mocked(financialService.getFinsDetailsLatest).mockResolvedValue(null)
     vi.mocked(financialService.getFinancialAdjustmentsLatest).mockResolvedValue([])
+    vi.mocked(stockEdinetService.getDisclosureTimeline).mockResolvedValue([])
+    vi.mocked(stockEdinetService.getLatestForecasts).mockResolvedValue({ next: null, next2: null })
+    vi.mocked(stockEdinetService.getLatestBridgeFact).mockResolvedValue(null)
+    vi.mocked(stockEdinetService.getLatestQualityScore).mockResolvedValue(null)
+    vi.mocked(stockEdinetService.getLatestTextScore).mockResolvedValue(null)
+    vi.mocked(watchlistService.getStockMemoPanel).mockResolvedValue({ isWatched: false, notes: [] } as any)
   })
 
   it('shows sync prompt when no price data', async () => {

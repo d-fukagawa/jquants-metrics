@@ -9,6 +9,15 @@ function fmtNum(n: number): string {
   return n.toLocaleString('ja-JP')
 }
 
+const ACTIONS_LINKS = [
+  { label: 'All Workflows', href: 'https://github.com/d-fukagawa/jquants-metrics/actions' },
+  { label: 'daily-sync', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/daily-sync.yml' },
+  { label: 'financial-sync', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/financial-sync.yml' },
+  { label: 'backfill-prices', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/backfill-prices.yml' },
+  { label: 'backfill-financials', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/backfill-financials.yml' },
+  { label: 'edinet-watch-sync', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/edinet-watch-sync.yml' },
+] as const
+
 syncStatusRoute.get('/', async (c) => {
   const db = createDb(c.env.DATABASE_URL)
   const s = await getSyncStatusSummary(db)
@@ -19,6 +28,16 @@ syncStatusRoute.get('/', async (c) => {
         <h1 class="search-label">同期ステータス</h1>
         <p class="empty-state" style="text-align:left;padding:0">
           GitHub Actions の <code>scripts/daily-sync.ts</code> 実行結果が DB に反映されているかを確認します。
+        </p>
+        <p class="empty-state" style="text-align:left;padding:0;margin-top:8px">
+          GitHub Actions:
+          {' '}
+          {ACTIONS_LINKS.map((l, i) => (
+            <span key={l.label}>
+              {i > 0 ? ' | ' : ''}
+              <a href={l.href} target="_blank" rel="noopener noreferrer">{l.label}</a>
+            </span>
+          ))}
         </p>
       </section>
 
@@ -64,6 +83,18 @@ syncStatusRoute.get('/', async (c) => {
           <div class="metric-value">{fmtNum(s.evEbitdaReadyCount)}</div>
           <div class="metric-sub">fins_details と FY 財務が揃う銘柄</div>
         </div>
+        <div class="metric-card">
+          <div class="metric-label">EDINET 同期成功率</div>
+          <div class="metric-value">
+            {s.edinetSuccessRatePct != null ? `${s.edinetSuccessRatePct.toFixed(1)}%` : '未同期'}
+          </div>
+          <div class="metric-sub">成功 {fmtNum(s.edinetRunSuccess)} / 実行 {fmtNum(s.edinetRunTotal)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">EDINET 最終成功</div>
+          <div class="metric-value">{s.edinetLatestSuccessAt ?? '未同期'}</div>
+          <div class="metric-sub">429: {fmtNum(s.edinetHttp429Total)} / 5xx: {fmtNum(s.edinetHttp5xxTotal)}</div>
+        </div>
       </section>
 
       <section class="card">
@@ -108,6 +139,19 @@ syncStatusRoute.get('/', async (c) => {
               <td>{s.finsDetailsLatestDiscDate ?? '未同期'}</td>
               <td>{fmtNum(s.finsDetailsLatestDiscDateCount)}</td>
               <td>銘柄数: {fmtNum(s.finsDetailsCodeCount)} / DNAあり: {fmtNum(s.finsDetailsDnaCount)}</td>
+            </tr>
+            <tr>
+              <td>edinet coverage</td>
+              <td>{fmtNum(s.edinetTimelineCodeCount)}</td>
+              <td>{s.edinetLatestSuccessAt ?? '未同期'}</td>
+              <td>{fmtNum(s.edinetRunSuccess)}</td>
+              <td>
+                timeline: {fmtNum(s.edinetTimelineCodeCount)} /
+                forecast: {fmtNum(s.edinetForecastCodeCount)} /
+                bridge: {fmtNum(s.edinetBridgeCodeCount)} /
+                quality: {fmtNum(s.edinetQualityCodeCount)} /
+                text: {fmtNum(s.edinetTextCodeCount)}
+              </td>
             </tr>
           </tbody>
         </table>

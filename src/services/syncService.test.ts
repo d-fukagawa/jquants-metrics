@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { syncStockMaster, syncDailyPrices, syncFinancialSummary, syncFinsDetails } from './syncService'
+import { syncStockMaster, syncDailyPrices, syncFinancialSummary, syncFinsDetails, syncFinsDetailsFromEdinet } from './syncService'
 import * as jquants from '../jquants/client'
+import * as edinet from '../edinet/client'
+import * as officialEdinet from '../edinet/officialClient'
 import type { Db } from '../db/client'
 
 vi.mock('../jquants/client')
+vi.mock('../edinet/client')
+vi.mock('../edinet/officialClient')
 
 // チェーン可能なモック DB を生成
 function makeMockDb() {
@@ -223,5 +227,62 @@ describe('syncFinsDetails', () => {
     const count = await syncFinsDetails(db, API_KEY, '72030')
     expect(count).toBe(0)
     expect(insert).not.toHaveBeenCalled()
+  })
+})
+
+// ---------- syncFinsDetailsFromEdinet ----------
+describe('syncFinsDetailsFromEdinet', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('stores FY row as EDINET:<fiscal_year> and saves official tax/adjustments', async () => {
+    vi.mocked(edinet.searchCompanyByCode).mockResolvedValue([
+      { edinetCode: 'E00001', code: '7203' },
+    ] as any)
+    vi.mocked(edinet.fetchCompanyBridgeFacts).mockResolvedValue([
+      {
+        fiscalYear: '2026-03',
+        periodType: 'FY',
+        debtCurrent: '50000000000',
+        debtNonCurr: '150000000000',
+        depreciation: '30000000000',
+        pretaxProfit: '120000000000',
+        sourceDocId: 'S100TEST',
+      },
+    ] as any)
+    vi.mocked(officialEdinet.fetchOfficialTaxAndAdjustments).mockResolvedValue({
+      taxExpense: '36000000000',
+      adjustments: [
+        { itemKey: 'Impairment loss', amount: '10000000000', direction: 'addback', category: 'impairment' },
+      ],
+    })
+
+    const { db, values } = makeMockDb()
+    const out = await syncFinsDetailsFromEdinet(db, 'edinetdb-key', 'official-key', '72030')
+
+    expect(out.synced).toBe(1)
+    expect(out.detailsSource).toBe('edinet+official')
+    expect(out.taxExpenseFilledCount).toBe(1)
+    expect(out.adjustmentsFilledCount).toBe(1)
+
+    const detailsRows = values.mock.calls[0][0]
+    expect(detailsRows[0].discNo).toBe('EDINET:2026-03')
+    expect(detailsRows[0].taxExpense).toBe('36000000000')
+    const adjRows = values.mock.calls[1][0]
+    expect(adjRows[0].source).toBe('edinet.official.statement')
+  })
+
+  it('returns edinetdb source when official key is unavailable', async () => {
+    vi.mocked(edinet.searchCompanyByCode).mockResolvedValue([
+      { edinetCode: 'E00001', code: '7203' },
+    ] as any)
+    vi.mocked(edinet.fetchCompanyBridgeFacts).mockResolvedValue([
+      { fiscalYear: '2026-03', periodType: 'FY', depreciation: '1' },
+    ] as any)
+
+    const { db } = makeMockDb()
+    const out = await syncFinsDetailsFromEdinet(db, 'edinetdb-key', null, '72030')
+    expect(out.detailsSource).toBe('edinetdb')
+    expect(out.taxExpenseFilledCount).toBe(0)
+    expect(out.adjustmentsFilledCount).toBe(0)
   })
 })

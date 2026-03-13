@@ -30,6 +30,10 @@ on:
         description: 'fins_details も同期するか (true/false)'
         required: false
         default: 'true'
+      edinet_fallback_on_403:
+        description: 'fins/details 403後にEDINET補完へ切替 (true/false)'
+        required: false
+        default: 'true'
 
 jobs:
   backfill-financials-manual:
@@ -52,12 +56,15 @@ jobs:
         env:
           DATABASE_URL:    ${{ secrets.DATABASE_URL }}
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          EDINETDB_API_KEY: ${{ secrets.EDINETDB_API_KEY }}
+          EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
           SHARD:           ${{ inputs.shard }}
           SHARDS:          ${{ inputs.shards }}
           SLEEP_MS:        ${{ inputs.sleep_ms }}
           RETRY_PER_CODE:  ${{ inputs.retry_per_code }}
           RATE_LIMIT_PER_MIN: ${{ inputs.rate_limit_per_min }}
           INCLUDE_DETAILS: ${{ inputs.include_details }}
+          EDINET_FALLBACK_ON_403: ${{ inputs.edinet_fallback_on_403 }}
         run: |
           set +e
           set -o pipefail
@@ -105,12 +112,15 @@ jobs:
         env:
           DATABASE_URL:    ${{ secrets.DATABASE_URL }}
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          EDINETDB_API_KEY: ${{ secrets.EDINETDB_API_KEY }}
+          EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
           SHARD:           '0'
           SHARDS:          '1'
           SLEEP_MS:        '1000'
           RETRY_PER_CODE:  '2'
           RATE_LIMIT_PER_MIN: '60'
           INCLUDE_DETAILS: 'true'
+          EDINET_FALLBACK_ON_403: 'true'
         run: |
           set +e
           set -o pipefail

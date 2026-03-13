@@ -22,6 +22,27 @@
       "when": 1773317110618,
       "tag": "0002_true_jasper_sitwell",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773336515308,
+      "tag": "0003_thick_plazm",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773341192096,
+      "tag": "0004_whole_true_believers",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773403563948,
+      "tag": "0005_stock_memo_refactor",
+      "breakpoints": true
     }
   ]
 }

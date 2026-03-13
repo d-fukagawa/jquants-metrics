@@ -1,6 +1,7 @@
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { financialAdjustments, financialSummary, finsDetails } from '../db/schema'
+import { parseNumber } from '../utils/number'
 
 export type FinancialRow = Awaited<ReturnType<typeof getLatestFinancials>>[number]
 
@@ -12,12 +13,6 @@ export async function getLatestFinancials(db: Db, code5: string) {
     .where(eq(financialSummary.code, code5))
     .orderBy(desc(financialSummary.discDate))
     .limit(20)
-}
-
-function parseNum(s: string | null | undefined): number | null {
-  if (!s) return null
-  const n = parseFloat(s)
-  return isNaN(n) ? null : n
 }
 
 export interface Metrics {
@@ -44,16 +39,16 @@ export function calcMetrics(
              eps: null, bps: null, divAnn: null, curPerType: null, discDate: null }
   }
 
-  const eps    = parseNum(fy.eps)
-  const equity = parseNum(fy.equity)
-  const np     = parseNum(fy.np)
-  const divAnn = parseNum(fy.divAnn)
+  const eps    = parseNumber(fy.eps)
+  const equity = parseNumber(fy.equity)
+  const np     = parseNumber(fy.np)
+  const divAnn = parseNumber(fy.divAnn)
 
   // BPS フォールバック: IFRS 中間では空 → Eq / (ShOutFY - TrShFY)
-  let bps = parseNum(fy.bps)
+  let bps = parseNumber(fy.bps)
   if (bps === null && equity !== null) {
-    const shOut = parseNum(fy.shOutFy)
-    const trSh  = parseNum(fy.trShFy)
+    const shOut = parseNumber(fy.shOutFy)
+    const trSh  = parseNumber(fy.trShFy)
     if (shOut !== null && trSh !== null) {
       const float = shOut - trSh
       bps = float > 0 ? equity / float : null
@@ -77,7 +72,7 @@ export function calcMetrics(
 
 // 大きな数値を兆/億で整形（例: 45,100,000,000,000 → "¥45.10兆"）
 export function fmtJpy(s: string | null | undefined): string {
-  const n = parseNum(s)
+  const n = parseNumber(s)
   if (n === null) return '—'
   const abs = Math.abs(n)
   const sign = n < 0 ? '▼ ' : ''
@@ -88,7 +83,7 @@ export function fmtJpy(s: string | null | undefined): string {
 
 // 万株単位に変換
 export function fmtVolume(s: string | null | undefined): string {
-  const n = parseNum(s)
+  const n = parseNumber(s)
   if (n === null) return '—'
   return `${Math.round(n / 1000).toLocaleString()}`
 }
@@ -104,25 +99,70 @@ export type FinancialAdjustmentRow = Awaited<ReturnType<typeof getFinancialAdjus
 
 // 最新の fins_details レコードを返す（なければ null）
 export async function getFinsDetailsLatest(db: Db, code5: string) {
-  const rows = await db
+  const jquantsRows = await db
     .select()
     .from(finsDetails)
-    .where(eq(finsDetails.code, code5))
+    .where(and(
+      eq(finsDetails.code, code5),
+      sql`${finsDetails.discNo} NOT LIKE 'EDINET:%'`,
+    ))
+    .orderBy(desc(sql`${finsDetails.dna} IS NOT NULL`), desc(finsDetails.discDate))
+    .limit(1)
+
+  const edinetRows = await db
+    .select()
+    .from(finsDetails)
+    .where(and(
+      eq(finsDetails.code, code5),
+      sql`${finsDetails.discNo} LIKE 'EDINET:%'`,
+    ))
     .orderBy(desc(finsDetails.discDate))
     .limit(1)
-  return rows[0] ?? null
+
+  const j = jquantsRows[0] ?? null
+  const e = edinetRows[0] ?? null
+  if (!j && !e) return null
+  if (j && !e) return j
+  if (!j && e) return e
+
+  return {
+    ...j!,
+    debtCurrent: j!.debtCurrent ?? e!.debtCurrent,
+    debtNonCurr: j!.debtNonCurr ?? e!.debtNonCurr,
+    dna: j!.dna ?? e!.dna,
+    pretaxProfit: j!.pretaxProfit ?? e!.pretaxProfit,
+    taxExpense: j!.taxExpense ?? e!.taxExpense,
+  }
 }
 
 // 最新開示の financial_adjustments 一式を返す（なければ空配列）
 export async function getFinancialAdjustmentsLatest(db: Db, code5: string) {
-  const rows = await db
+  const jquantsRows = await db
     .select()
     .from(financialAdjustments)
-    .where(eq(financialAdjustments.code, code5))
+    .where(and(
+      eq(financialAdjustments.code, code5),
+      eq(financialAdjustments.source, 'fins_details.statement'),
+    ))
     .orderBy(desc(financialAdjustments.discDate))
-  if (rows.length === 0) return []
-  const latestDiscNo = rows[0].discNo
-  return rows.filter(r => r.discNo === latestDiscNo)
+
+  if (jquantsRows.length > 0) {
+    const latestDiscNo = jquantsRows[0].discNo
+    return jquantsRows.filter(r => r.discNo === latestDiscNo)
+  }
+
+  const edinetRows = await db
+    .select()
+    .from(financialAdjustments)
+    .where(and(
+      eq(financialAdjustments.code, code5),
+      sql`${financialAdjustments.source} <> 'fins_details.statement'`,
+    ))
+    .orderBy(desc(financialAdjustments.discDate))
+
+  if (edinetRows.length === 0) return []
+  const latestDiscNo = edinetRows[0].discNo
+  return edinetRows.filter(r => r.discNo === latestDiscNo)
 }
 
 export interface AdvancedMetrics {
@@ -163,16 +203,16 @@ export function calcAdvancedMetrics(
   }
   if (!fy || latestClose === null) return empty
 
-  const shOut  = parseNum(fy.shOutFy)
-  const cashEq = parseNum(fy.cashEq)
-  const op     = parseNum(fy.op)
-  const equity = parseNum(fy.equity)
+  const shOut  = parseNumber(fy.shOutFy)
+  const cashEq = parseNumber(fy.cashEq)
+  const op     = parseNumber(fy.op)
+  const equity = parseNumber(fy.equity)
 
-  const debtCurrent  = detail ? parseNum(detail.debtCurrent)  : null
-  const debtNonCurr  = detail ? parseNum(detail.debtNonCurr)  : null
-  const dna          = detail ? parseNum(detail.dna)          : null
-  const pretaxProfit = detail ? parseNum(detail.pretaxProfit) : null
-  const taxExpense   = detail ? parseNum(detail.taxExpense)   : null
+  const debtCurrent  = detail ? parseNumber(detail.debtCurrent)  : null
+  const debtNonCurr  = detail ? parseNumber(detail.debtNonCurr)  : null
+  const dna          = detail ? parseNumber(detail.dna)          : null
+  const pretaxProfit = detail ? parseNumber(detail.pretaxProfit) : null
+  const taxExpense   = detail ? parseNumber(detail.taxExpense)   : null
 
   // 時価総額
   const mktCap = shOut !== null ? round0(latestClose * shOut) : null
@@ -223,12 +263,12 @@ export function calcAdjustedEbitda(
   detail: FinsDetailRow | null,
   adjustments: FinancialAdjustmentRow[],
 ): AdjustedEbitdaMetrics {
-  const op = fy ? parseNum(fy.op) : null
+  const op = fy ? parseNumber(fy.op) : null
   if (op === null) {
     return { ebitda: null, adjustedEbitda: null, addbackTotal: 0, deductionTotal: 0, reason: 'op_missing' }
   }
 
-  const dna = detail ? parseNum(detail.dna) : null
+  const dna = detail ? parseNumber(detail.dna) : null
   if (dna === null) {
     return { ebitda: null, adjustedEbitda: null, addbackTotal: 0, deductionTotal: 0, reason: 'dna_missing' }
   }
@@ -241,7 +281,7 @@ export function calcAdjustedEbitda(
   let addbackTotal = 0
   let deductionTotal = 0
   for (const a of adjustments) {
-    const n = parseNum(a.amount)
+    const n = parseNumber(a.amount)
     if (n === null || n === 0) continue
     if (a.direction === 'addback') addbackTotal += Math.abs(n)
     if (a.direction === 'deduction') deductionTotal += Math.abs(n)

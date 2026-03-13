@@ -191,6 +191,17 @@ gh workflow run backfill-prices.yml --ref main -f from=2025-08-01 -f to=2025-08-
 - `backfill-financials` は `INCLUDE_DETAILS=true` で開始し、403 検出時は自動で details 同期を無効化して `financial_summary` のみ継続する
 - 詳細指標（EV/EBITDA・NC比率）の本格改善には、`fins/details` 利用可能プランへの変更が必要
 
+方針更新（2026-03-13）:
+- JQuants プラン変更は行わず、`fins_details` で取得できない項目は EDINETDB から補完取得する
+
+追加タスク（`fins_details` 403 の不足項目補完）:
+- [ ] `debt_current`（有利子負債_流動）を EDINETDB から取得して保存
+- [ ] `debt_non_curr`（有利子負債_非流動）を EDINETDB から取得して保存
+- [ ] `dna`（減価償却費・償却費）を EDINETDB から取得して保存
+- [ ] `pretax_profit`（税引前利益）を EDINETDB から取得して保存
+- [ ] `tax_expense`（法人税等）を EDINETDB から取得して保存
+- [ ] `financial_adjustments` 用の Statement 内調整項目（addback/deduction 抽出元）を EDINETDB から取得して保存
+
 完了条件:
 - [ ] `fins_details` 銘柄カバレッジ 80% 以上
 - [ ] `EV/EBITDA` が表示される銘柄数が有意に増加（実行前後で比較）

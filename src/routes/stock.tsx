@@ -7,23 +7,31 @@ import {
   getLatestFinancials,
   calcMetrics,
   fmtJpy,
-  fmtVolume,
   getFinsDetailsLatest,
   getFinancialAdjustmentsLatest,
   calcAdvancedMetrics,
   calcAdjustedEbitda,
 } from '../services/financialService'
+import {
+  getDisclosureTimeline,
+  getLatestBridgeFact,
+  getLatestForecasts,
+  getLatestQualityScore,
+  getLatestTextScore,
+} from '../services/stockEdinetService'
+import { getStockMemoPanel } from '../services/watchlistService'
 import { PriceChart } from '../components/PriceChart'
 import { MetricsCard } from '../components/MetricsCard'
+import { parseCode4, toCode4, toCode5 } from '../utils/stockCode'
 
 export const stockRoute = new Hono<{ Bindings: Bindings }>()
 
 stockRoute.get('/:code', async (c) => {
-  const code4 = c.req.param('code')
-  if (!/^\d{4}$/.test(code4)) {
-    return c.html('<p>不正なコードです。4桁の数字を指定してください。</p>', 400)
+  const code4 = parseCode4(c.req.param('code'))
+  if (!code4) {
+    return c.html('<p>不正なコードです。4桁の英数字を指定してください。</p>', 400)
   }
-  const code5 = code4 + '0'
+  const code5 = toCode5(code4)
   const db    = createDb(c.env.DATABASE_URL)
 
   const [stock, prices, financials, finsDetail, adjustments] = await Promise.all([
@@ -33,12 +41,20 @@ stockRoute.get('/:code', async (c) => {
     getFinsDetailsLatest(db, code5),
     getFinancialAdjustmentsLatest(db, code5),
   ])
+  const [timeline, forecasts, bridge, qualityScore, textScore, memoPanel] = await Promise.all([
+    getDisclosureTimeline(db, code5, 12),
+    getLatestForecasts(db, code5),
+    getLatestBridgeFact(db, code5),
+    getLatestQualityScore(db, code5),
+    getLatestTextScore(db, code5),
+    getStockMemoPanel(db, code5),
+  ])
 
   if (!stock) {
     return c.html('<p>銘柄が見つかりません。先に /api/sync で master データを同期してください。</p>', 404)
   }
 
-  const code4display = stock.code.slice(0, 4)
+  const code4display = toCode4(stock.code)
 
   // 最新終値・前日比
   const p0 = prices[0] ?? null
@@ -68,8 +84,20 @@ stockRoute.get('/:code', async (c) => {
     adjustment_missing: '調整項目データ不足',
   }[adjMetrics.reason]
 
+  function scoreTooltip(formula: string, components: unknown): string {
+    const compText = typeof components === 'object' && components !== null
+      ? Object.entries(components as Record<string, unknown>).map(([k, v]) => `${k}: ${String(v)}`).join(' | ')
+      : 'components: n/a'
+    return `${formula} | ${compText}`
+  }
+
+  function fmtDateTime(dt: Date): string {
+    return new Date(dt).toISOString().replace('T', ' ').slice(0, 16)
+  }
+
   return c.render(
-    <div>
+    <div class="stock-detail-layout">
+      <section class="stock-detail-main">
       {/* Breadcrumb */}
       <nav class="breadcrumb">
         <a href="/">ホーム</a>
@@ -82,6 +110,7 @@ stockRoute.get('/:code', async (c) => {
         <div>
           <div class="stock-code">{code4display} · {stock.coNameEn}</div>
           <h1 class="stock-name">{stock.coName}</h1>
+          <div style="margin-bottom:8px"><a class="btn-sm" href="/watchlist">ウォッチ一覧を見る</a></div>
           <div class="tags">
             <span class="tag">{stock.mktNm}市場</span>
             <span class="tag">{stock.sector17Nm}（S17）</span>
@@ -288,6 +317,178 @@ stockRoute.get('/:code', async (c) => {
       {financials.length === 0 && (
         <p class="empty-state">財務データがありません。/api/sync で financials を同期してください。</p>
       )}
+
+      {/* EDINET: 開示タイムライン */}
+      <div class="section-title">EDINET 開示タイムライン</div>
+      <div class="card" style="margin-bottom:20px">
+        {timeline.length > 0 ? (
+          <table>
+            <thead>
+              <tr>
+                <th>開示日</th>
+                <th>種別</th>
+                <th>タイトル</th>
+                <th>修正</th>
+              </tr>
+            </thead>
+            <tbody>
+              {timeline.map((t) => (
+                <tr key={`${t.edinetCode}-${t.docId}`}>
+                  <td style="font-family:ui-monospace,monospace;font-size:12px">{t.filingDate}</td>
+                  <td>{t.eventType}</td>
+                  <td>{t.title}</td>
+                  <td>{t.isAmendment ? 'あり' : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p class="empty-state">EDINETタイムラインが未同期です（target: edinet_timeline）。</p>
+        )}
+      </div>
+
+      {/* EDINET: 会社予想（来期 / 再来期） */}
+      <div class="section-title">EDINET 会社予想スナップショット（来期 / 再来期）</div>
+      <div class="fin-grid" style="margin-bottom:20px">
+        {[{ key: 'next', label: '来期', row: forecasts.next }, { key: 'next2', label: '再来期', row: forecasts.next2 }].map(item => (
+          <div key={item.key} class="card card-body">
+            <div class="fin-block-title">{item.label}</div>
+            <div class="fin-row"><span class="fin-key">対象年度</span><span class="fin-val">{item.row?.fiscalYear ?? '—'}</span></div>
+            <div class="fin-row"><span class="fin-key">売上予想</span><span class="fin-val">{fmtJpy(item.row?.salesForecast ?? null)}</span></div>
+            <div class="fin-row"><span class="fin-key">営業利益予想</span><span class="fin-val">{fmtJpy(item.row?.opForecast ?? null)}</span></div>
+            <div class="fin-row"><span class="fin-key">純利益予想</span><span class="fin-val">{fmtJpy(item.row?.npForecast ?? null)}</span></div>
+            <div class="fin-row"><span class="fin-key">EPS予想</span><span class="fin-val">{item.row?.epsForecast ? `¥${Number(item.row.epsForecast).toFixed(2)}` : '—'}</span></div>
+            <div class="fin-row"><span class="fin-key">開示日</span><span class="fin-val">{item.row?.disclosedAt ?? '—'}</span></div>
+          </div>
+        ))}
+      </div>
+
+      {/* EDINET: 会計調整ブリッジ */}
+      <div class="section-title">EDINET 会計調整ブリッジ（OP → Pretax → NP → CFO）</div>
+      <div class="card" style="margin-bottom:20px">
+        {bridge ? (
+          <table>
+            <thead>
+              <tr>
+                <th>要素</th>
+                <th class="r">値</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>営業利益 (OP)</td><td class="r">{fmtJpy(bridge.operatingProfit)}</td></tr>
+              <tr><td>税前利益 (Pretax)</td><td class="r">{fmtJpy(bridge.pretaxProfit)}</td></tr>
+              <tr><td>当期純利益 (NP)</td><td class="r">{fmtJpy(bridge.netProfit)}</td></tr>
+              <tr><td>営業CF (CFO)</td><td class="r">{fmtJpy(bridge.cfo)}</td></tr>
+              <tr><td>減価償却費</td><td class="r">{fmtJpy(bridge.depreciation)}</td></tr>
+              <tr><td>対象年度</td><td class="r">{bridge.fiscalYear}</td></tr>
+            </tbody>
+          </table>
+        ) : (
+          <p class="empty-state">EDINETブリッジデータが未同期です（target: edinet_bridge）。</p>
+        )}
+      </div>
+
+      {/* EDINET: 会計品質 / テキスト異常 */}
+      <div class="section-title">EDINET スコア（会計品質 / テキスト異常）</div>
+      <div class="metrics-grid" style="margin-bottom:20px">
+        <div class="metric-card">
+          <div class="metric-label">
+            会計品質スコア
+            <span class="tip" title={qualityScore ? scoreTooltip(qualityScore.formulaText, qualityScore.componentsJson) : '未同期'}>
+              ⓘ
+            </span>
+          </div>
+          <div class="metric-value">{qualityScore?.qualityScore ?? '—'}</div>
+          <div class="metric-sub">{qualityScore ? `as of ${qualityScore.asOfDate}` : 'target: edinet_quality_scores'}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">
+            テキスト異常スコア
+            <span class="tip" title={textScore ? scoreTooltip(textScore.formulaText, textScore.componentsJson) : '未同期'}>
+              ⓘ
+            </span>
+          </div>
+          <div class="metric-value">{textScore?.anomalyScore ?? '—'}</div>
+          <div class="metric-sub">{textScore ? `as of ${textScore.asOfDate}` : 'target: edinet_text_scores'}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">品質-異常差分</div>
+          <div class="metric-value">
+            {(qualityScore && textScore)
+              ? (qualityScore.qualityScore - textScore.anomalyScore)
+              : '—'}
+          </div>
+          <div class="metric-sub">quality - anomaly</div>
+        </div>
+      </div>
+      </section>
+
+      <aside class="stock-detail-side">
+        <div class="panel stock-memo-panel">
+          <div class="panel-header">
+            <span class="panel-title">検討メモ</span>
+            <span class="badge">{memoPanel.notes.length}件</span>
+          </div>
+          <div class="panel-body">
+            <form method="post" action="/watchlist/watch" class="stock-watch-form">
+              <input type="hidden" name="code" value={code4display} />
+              <input type="hidden" name="is_watched" value={memoPanel.isWatched ? '0' : '1'} />
+              <input type="hidden" name="redirect_to" value={`/stock/${code4display}`} />
+              <button class="btn btn-primary" type="submit" style="width:100%;height:34px">
+                {memoPanel.isWatched ? 'ウォッチ解除' : 'ウォッチ追加'}
+              </button>
+            </form>
+
+            <a class="btn-sm" href="/watchlist">ウォッチ一覧を見る</a>
+
+            <div>
+              <div class="fg-label">新規メモ</div>
+              <form method="post" action="/watchlist/notes/add" class="stock-memo-edit-form">
+                <input type="hidden" name="code" value={code4display} />
+                <input type="hidden" name="redirect_to" value={`/stock/${code4display}`} />
+                <textarea
+                  class="stock-memo-textarea"
+                  name="body"
+                  placeholder="この銘柄の検討メモを入力（最大1000文字）"
+                ></textarea>
+                <div class="stock-memo-actions">
+                  <button class="btn-sm" type="submit">メモ追加</button>
+                </div>
+              </form>
+            </div>
+
+            <div>
+              <div class="fg-label">メモ一覧</div>
+              {memoPanel.notes.length === 0 ? (
+                <p class="empty-state stock-memo-empty">メモはまだありません</p>
+              ) : (
+                <div class="stock-memo-list">
+                  {memoPanel.notes.map((note) => (
+                    <div key={note.id} class="stock-memo-item">
+                      <form method="post" action="/watchlist/notes/update" class="stock-memo-edit-form">
+                        <input type="hidden" name="code" value={code4display} />
+                        <input type="hidden" name="note_id" value={note.id} />
+                        <input type="hidden" name="redirect_to" value={`/stock/${code4display}`} />
+                        <textarea class="stock-memo-textarea" name="body">{note.body}</textarea>
+                        <div class="stock-memo-meta">更新: {fmtDateTime(note.updatedAt)}</div>
+                        <div class="stock-memo-actions">
+                          <button class="btn-sm" type="submit">更新</button>
+                        </div>
+                      </form>
+                      <form method="post" action="/watchlist/notes/delete" class="stock-memo-delete-form">
+                        <input type="hidden" name="code" value={code4display} />
+                        <input type="hidden" name="note_id" value={note.id} />
+                        <input type="hidden" name="redirect_to" value={`/stock/${code4display}`} />
+                        <button class="btn-sm" type="submit">削除</button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>,
   )
 })

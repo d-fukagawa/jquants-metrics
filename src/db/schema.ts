@@ -208,12 +208,25 @@ export const edinetSyncRuns = pgTable('edinet_sync_runs', {
   index('idx_edinet_sync_runs_target_started').on(t.target, t.startedAt),
 ])
 
-// ウォッチ銘柄（単一ユーザー前提）
-export const watchlist = pgTable('watchlist', {
+// 銘柄メモメタ（単一ユーザー前提）
+export const stockMemoMeta = pgTable('stock_memo_meta', {
   code:      varchar('code', { length: 5 }).primaryKey(),
-  note:      text('note'),
+  isWatched: boolean('is_watched').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 }, (t) => [
-  index('idx_watchlist_created_at').on(t.createdAt),
+  index('idx_stock_memo_meta_watched').on(t.isWatched),
+  index('idx_stock_memo_meta_updated_at').on(t.updatedAt),
+])
+
+// 銘柄メモ本体（1銘柄に複数メモ）
+export const stockMemos = pgTable('stock_memos', {
+  id:        text('id').primaryKey(),
+  code:      varchar('code', { length: 5 }).notNull(),
+  body:      text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+}, (t) => [
+  index('idx_stock_memos_code').on(t.code),
+  index('idx_stock_memos_updated_at').on(t.updatedAt),
 ])

@@ -8,6 +8,8 @@ vi.mock('../services/screenService')
 const ENV = {
   DATABASE_URL: 'postgres://test',
   JQUANTS_API_KEY: 'key',
+  EDINETDB_API_KEY: 'edinet-key',
+  EDINET_API_KEY: 'official-edinet-key',
   SYNC_SECRET: 'secret',
 }
 

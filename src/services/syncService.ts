@@ -1,15 +1,26 @@
 import { sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { stockMaster, dailyPrices, financialSummary, finsDetails, financialAdjustments } from '../db/schema'
+import type { DailyBar } from '../jquants/types'
 import { fetchEquitiesMaster, fetchDailyPrices, fetchDailyPricesAll, fetchFinancialSummary, fetchFinsDetails } from '../jquants/client'
+import { fetchCompanyBridgeFacts, searchCompanyByCode } from '../edinet/client'
+import { fetchOfficialTaxAndAdjustments } from '../edinet/officialClient'
+import { toNullableString } from '../utils/number'
+import { enumerateDates } from '../utils/date'
 
 const BATCH_SIZE = 500
+export const DEFAULT_PRICE_SYNC_FROM = '2023-11-29'
+export const DEFAULT_PRICE_SYNC_TO = '2025-11-29'
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
-// 空文字 → null 変換
-function toNum(s: string | null | undefined): string | null {
-  return s === null || s === undefined || s === '' ? null : s
+export type DetailsSource = 'jquants' | 'edinetdb' | 'edinet+official'
+
+export interface EdinetFallbackResult {
+  synced: number
+  detailsSource: DetailsSource
+  taxExpenseFilledCount: number
+  adjustmentsFilledCount: number
 }
 
 // XBRL キー名の候補から最初にマッチする値を返す
@@ -111,6 +122,131 @@ function pickAdjustmentItems(stmt: Record<string, string>, code: string, discNo:
   return rows
 }
 
+function isFyPeriodType(periodType: string | null | undefined): boolean {
+  if (!periodType) return true
+  const p = periodType.toUpperCase()
+  return p === 'FY' || p.includes('ANNUAL') || p.includes('FULL') || periodType.includes('通期')
+}
+
+function toEdinetDiscNo(fiscalYear: string): string {
+  return `EDINET:${fiscalYear.trim()}`
+}
+
+async function upsertFinsDetailsRows(
+  db: Db,
+  rows: Array<{
+    code: string
+    discNo: string
+    discDate: string | null
+    docType: string | null
+    curPerType: string | null
+    debtCurrent: string | null
+    debtNonCurr: string | null
+    dna: string | null
+    pretaxProfit: string | null
+    taxExpense: string | null
+  }>,
+) {
+  if (rows.length === 0) return
+  await db.insert(finsDetails)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [finsDetails.code, finsDetails.discNo],
+      set: {
+        discDate:     sql`excluded.disc_date`,
+        docType:      sql`excluded.doc_type`,
+        curPerType:   sql`excluded.cur_per_type`,
+        debtCurrent:  sql`excluded.debt_current`,
+        debtNonCurr:  sql`excluded.debt_non_curr`,
+        dna:          sql`excluded.dna`,
+        pretaxProfit: sql`excluded.pretax_profit`,
+        taxExpense:   sql`excluded.tax_expense`,
+      },
+    })
+}
+
+async function upsertFinancialAdjustmentRows(
+  db: Db,
+  rows: Array<{
+    code: string
+    discNo: string
+    discDate: string | null
+    itemKey: string
+    amount: string
+    direction: 'addback' | 'deduction'
+    category: string
+    source: string
+  }>,
+) {
+  if (rows.length === 0) return
+  await db.insert(financialAdjustments)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [
+        financialAdjustments.code,
+        financialAdjustments.discNo,
+        financialAdjustments.itemKey,
+        financialAdjustments.direction,
+      ],
+      set: {
+        discDate:  sql`excluded.disc_date`,
+        amount:    sql`excluded.amount`,
+        category:  sql`excluded.category`,
+        source:    sql`excluded.source`,
+      },
+    })
+}
+
+async function resolveEdinetCode(edinetDbApiKey: string, code5: string): Promise<string | null> {
+  const code4 = code5.slice(0, 4)
+  const rows = await searchCompanyByCode(edinetDbApiKey, code4)
+  const match = rows.find(r => (r.code ?? '').slice(0, 4) === code4) ?? rows[0] ?? null
+  return match?.edinetCode ?? null
+}
+
+function mapDailyPriceRow(b: DailyBar) {
+  return {
+    code:      b.Code,
+    date:      b.Date,
+    open:      b.O?.toString()         ?? null,
+    high:      b.H?.toString()         ?? null,
+    low:       b.L?.toString()         ?? null,
+    close:     b.C?.toString()         ?? null,
+    volume:    b.Vo?.toString()        ?? null,
+    turnover:  b.Va?.toString()        ?? null,
+    adjFactor: b.AdjFactor?.toString() ?? null,
+    adjOpen:   b.AdjO?.toString()      ?? null,
+    adjHigh:   b.AdjH?.toString()      ?? null,
+    adjLow:    b.AdjL?.toString()      ?? null,
+    adjClose:  b.AdjC?.toString()      ?? null,
+    adjVolume: b.AdjVo?.toString()     ?? null,
+  }
+}
+
+async function upsertDailyPriceRows(db: Db, rows: ReturnType<typeof mapDailyPriceRow>[]) {
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    await db.insert(dailyPrices)
+      .values(rows.slice(i, i + BATCH_SIZE))
+      .onConflictDoUpdate({
+        target: [dailyPrices.code, dailyPrices.date],
+        set: {
+          open:      sql`excluded.open`,
+          high:      sql`excluded.high`,
+          low:       sql`excluded.low`,
+          close:     sql`excluded.close`,
+          volume:    sql`excluded.volume`,
+          turnover:  sql`excluded.turnover`,
+          adjFactor: sql`excluded.adj_factor`,
+          adjOpen:   sql`excluded.adj_open`,
+          adjHigh:   sql`excluded.adj_high`,
+          adjLow:    sql`excluded.adj_low`,
+          adjClose:  sql`excluded.adj_close`,
+          adjVolume: sql`excluded.adj_volume`,
+        },
+      })
+  }
+}
+
 // 銘柄マスタ同期 — /v2/equities/master
 export async function syncStockMaster(db: Db, apiKey: string): Promise<number> {
   const masters = await fetchEquitiesMaster(apiKey)
@@ -161,50 +297,14 @@ export async function syncDailyPrices(
   db: Db,
   apiKey: string,
   code: string,
-  from = '2023-11-29',
-  to   = '2025-11-29',
+  from = DEFAULT_PRICE_SYNC_FROM,
+  to   = DEFAULT_PRICE_SYNC_TO,
 ): Promise<number> {
   const bars = await fetchDailyPrices(apiKey, code, from, to)
   if (bars.length === 0) return 0
 
-  const rows = bars.map(b => ({
-    code:      b.Code,
-    date:      b.Date,
-    open:      b.O?.toString()         ?? null,
-    high:      b.H?.toString()         ?? null,
-    low:       b.L?.toString()         ?? null,
-    close:     b.C?.toString()         ?? null,
-    volume:    b.Vo?.toString()        ?? null,
-    turnover:  b.Va?.toString()        ?? null,
-    adjFactor: b.AdjFactor?.toString() ?? null,
-    adjOpen:   b.AdjO?.toString()      ?? null,
-    adjHigh:   b.AdjH?.toString()      ?? null,
-    adjLow:    b.AdjL?.toString()      ?? null,
-    adjClose:  b.AdjC?.toString()      ?? null,
-    adjVolume: b.AdjVo?.toString()     ?? null,
-  }))
-
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    await db.insert(dailyPrices)
-      .values(rows.slice(i, i + BATCH_SIZE))
-      .onConflictDoUpdate({
-        target: [dailyPrices.code, dailyPrices.date],
-        set: {
-          open:      sql`excluded.open`,
-          high:      sql`excluded.high`,
-          low:       sql`excluded.low`,
-          close:     sql`excluded.close`,
-          volume:    sql`excluded.volume`,
-          turnover:  sql`excluded.turnover`,
-          adjFactor: sql`excluded.adj_factor`,
-          adjOpen:   sql`excluded.adj_open`,
-          adjHigh:   sql`excluded.adj_high`,
-          adjLow:    sql`excluded.adj_low`,
-          adjClose:  sql`excluded.adj_close`,
-          adjVolume: sql`excluded.adj_volume`,
-        },
-      })
-  }
+  const rows = bars.map(mapDailyPriceRow)
+  await upsertDailyPriceRows(db, rows)
   return rows.length
 }
 
@@ -224,24 +324,24 @@ export async function syncFinancialSummary(
     discDate:    s.DiscDate  || null,
     docType:     s.DocType   || null,
     curPerType:  s.CurPerType || null,
-    sales:       toNum(s.Sales),
-    op:          toNum(s.OP),
-    np:          toNum(s.NP),
-    eps:         toNum(s.EPS),
-    bps:         toNum(s.BPS),   // 空文字は NULL
-    equity:      toNum(s.Eq),
-    eqAr:        toNum(s.EqAR),
-    totalAssets: toNum(s.TA),
-    cfo:         toNum(s.CFO),
-    cashEq:      toNum(s.CashEq),
-    shOutFy:     toNum(s.ShOutFY),
-    trShFy:      toNum(s.TrShFY),
-    divAnn:      toNum(s.DivAnn),
-    fSales:      toNum(s.FSales),
-    fOp:         toNum(s.FOP),
-    fNp:         toNum(s.FNP),
-    fEps:        toNum(s.FEPS),
-    fDivAnn:     toNum(s.FDivAnn),
+    sales:       toNullableString(s.Sales),
+    op:          toNullableString(s.OP),
+    np:          toNullableString(s.NP),
+    eps:         toNullableString(s.EPS),
+    bps:         toNullableString(s.BPS),   // 空文字は NULL
+    equity:      toNullableString(s.Eq),
+    eqAr:        toNullableString(s.EqAR),
+    totalAssets: toNullableString(s.TA),
+    cfo:         toNullableString(s.CFO),
+    cashEq:      toNullableString(s.CashEq),
+    shOutFy:     toNullableString(s.ShOutFY),
+    trShFy:      toNullableString(s.TrShFY),
+    divAnn:      toNullableString(s.DivAnn),
+    fSales:      toNullableString(s.FSales),
+    fOp:         toNullableString(s.FOP),
+    fNp:         toNullableString(s.FNP),
+    fEps:        toNullableString(s.FEPS),
+    fDivAnn:     toNullableString(s.FDivAnn),
   }))
 
   await db.insert(financialSummary)
@@ -309,52 +409,139 @@ export async function syncFinsDetails(
       discDate:     discDate,
       docType:      d.TypeOfDocument   || null,
       curPerType:   d.TypeOfCurrentPeriod || null,
-      debtCurrent:  toNum(firstMatch(stmt, KEYS.debtCurrent)),
-      debtNonCurr:  toNum(firstMatch(stmt, KEYS.debtNonCurr)),
-      dna:          toNum(firstMatch(stmt, KEYS.dna)),
-      pretaxProfit: toNum(firstMatch(stmt, KEYS.pretaxProfit)),
-      taxExpense:   toNum(firstMatch(stmt, KEYS.taxExpense)),
+      debtCurrent:  toNullableString(firstMatch(stmt, KEYS.debtCurrent)),
+      debtNonCurr:  toNullableString(firstMatch(stmt, KEYS.debtNonCurr)),
+      dna:          toNullableString(firstMatch(stmt, KEYS.dna)),
+      pretaxProfit: toNullableString(firstMatch(stmt, KEYS.pretaxProfit)),
+      taxExpense:   toNullableString(firstMatch(stmt, KEYS.taxExpense)),
     }
   }).filter(r => r.discNo)
 
   if (rows.length === 0) return 0
 
-  await db.insert(finsDetails)
-    .values(rows)
-    .onConflictDoUpdate({
-      target: [finsDetails.code, finsDetails.discNo],
-      set: {
-        discDate:     sql`excluded.disc_date`,
-        docType:      sql`excluded.doc_type`,
-        curPerType:   sql`excluded.cur_per_type`,
-        debtCurrent:  sql`excluded.debt_current`,
-        debtNonCurr:  sql`excluded.debt_non_curr`,
-        dna:          sql`excluded.dna`,
-        pretaxProfit: sql`excluded.pretax_profit`,
-        taxExpense:   sql`excluded.tax_expense`,
-      },
-    })
-
-  if (adjustmentRows.length > 0) {
-    await db.insert(financialAdjustments)
-      .values(adjustmentRows)
-      .onConflictDoUpdate({
-        target: [
-          financialAdjustments.code,
-          financialAdjustments.discNo,
-          financialAdjustments.itemKey,
-          financialAdjustments.direction,
-        ],
-        set: {
-          discDate:  sql`excluded.disc_date`,
-          amount:    sql`excluded.amount`,
-          category:  sql`excluded.category`,
-          source:    sql`excluded.source`,
-        },
-      })
-  }
+  await upsertFinsDetailsRows(db, rows)
+  await upsertFinancialAdjustmentRows(db, adjustmentRows)
 
   return rows.length
+}
+
+// 詳細財務情報補完（EDINETDB + 公式EDINET API）
+// - FY のみ対象
+// - disc_no は EDINET:<fiscal_year>
+// - official が取れない場合は tax/adjustment を null 許容
+export async function syncFinsDetailsFromEdinet(
+  db: Db,
+  edinetDbApiKey: string,
+  edinetApiKey: string | null,
+  code5: string,
+): Promise<EdinetFallbackResult> {
+  const edinetCode = await resolveEdinetCode(edinetDbApiKey, code5)
+  if (!edinetCode) {
+    return {
+      synced: 0,
+      detailsSource: 'edinetdb',
+      taxExpenseFilledCount: 0,
+      adjustmentsFilledCount: 0,
+    }
+  }
+
+  const facts = await fetchCompanyBridgeFacts(edinetDbApiKey, edinetCode)
+  const fyFacts = facts.filter(f => isFyPeriodType(f.periodType))
+  if (fyFacts.length === 0) {
+    return {
+      synced: 0,
+      detailsSource: 'edinetdb',
+      taxExpenseFilledCount: 0,
+      adjustmentsFilledCount: 0,
+    }
+  }
+
+  const rows: Array<{
+    code: string
+    discNo: string
+    discDate: string | null
+    docType: string | null
+    curPerType: string | null
+    debtCurrent: string | null
+    debtNonCurr: string | null
+    dna: string | null
+    pretaxProfit: string | null
+    taxExpense: string | null
+  }> = []
+
+  const adjustmentRows: Array<{
+    code: string
+    discNo: string
+    discDate: string | null
+    itemKey: string
+    amount: string
+    direction: 'addback' | 'deduction'
+    category: string
+    source: string
+  }> = []
+
+  let taxExpenseFilledCount = 0
+  let adjustmentsFilledCount = 0
+  let usedOfficial = false
+
+  for (const fact of fyFacts) {
+    const fiscalYear = fact.fiscalYear?.trim()
+    if (!fiscalYear) continue
+
+    const discNo = toEdinetDiscNo(fiscalYear)
+    const discDate = fact.disclosedAt ?? null
+    let taxExpense = toNullableString(fact.taxExpense)
+
+    if (edinetApiKey && fact.sourceDocId) {
+      try {
+        const official = await fetchOfficialTaxAndAdjustments(edinetApiKey, fact.sourceDocId)
+        usedOfficial = true
+        if (taxExpense == null && official.taxExpense != null) {
+          taxExpense = toNullableString(official.taxExpense)
+        }
+        for (const a of official.adjustments) {
+          adjustmentRows.push({
+            code: code5,
+            discNo,
+            discDate,
+            itemKey: a.itemKey,
+            amount: a.amount,
+            direction: a.direction,
+            category: a.category,
+            source: 'edinet.official.statement',
+          })
+        }
+      } catch {
+        // 公式EDINETの取得失敗は継続（NULL許容）
+      }
+    }
+
+    if (taxExpense != null) taxExpenseFilledCount++
+
+    rows.push({
+      code: code5,
+      discNo,
+      discDate,
+      docType: 'EDINET_FINANCIALS',
+      curPerType: 'FY',
+      debtCurrent: toNullableString(fact.debtCurrent),
+      debtNonCurr: toNullableString(fact.debtNonCurr),
+      dna: toNullableString(fact.depreciation),
+      pretaxProfit: toNullableString(fact.pretaxProfit),
+      taxExpense,
+    })
+  }
+
+  adjustmentsFilledCount = adjustmentRows.length
+  await upsertFinsDetailsRows(db, rows)
+  await upsertFinancialAdjustmentRows(db, adjustmentRows)
+
+  return {
+    synced: rows.length,
+    detailsSource: usedOfficial ? 'edinet+official' : 'edinetdb',
+    taxExpenseFilledCount,
+    adjustmentsFilledCount,
+  }
 }
 
 // 全銘柄の日足株価を1日分一括同期 — 1リクエストで全銘柄取得
@@ -363,44 +550,8 @@ export async function syncDailyPricesAll(db: Db, apiKey: string, date: string): 
   const bars = await fetchDailyPricesAll(apiKey, date)
   if (bars.length === 0) return 0
 
-  const rows = bars.map(b => ({
-    code:      b.Code,
-    date:      b.Date,
-    open:      b.O?.toString()         ?? null,
-    high:      b.H?.toString()         ?? null,
-    low:       b.L?.toString()         ?? null,
-    close:     b.C?.toString()         ?? null,
-    volume:    b.Vo?.toString()        ?? null,
-    turnover:  b.Va?.toString()        ?? null,
-    adjFactor: b.AdjFactor?.toString() ?? null,
-    adjOpen:   b.AdjO?.toString()      ?? null,
-    adjHigh:   b.AdjH?.toString()      ?? null,
-    adjLow:    b.AdjL?.toString()      ?? null,
-    adjClose:  b.AdjC?.toString()      ?? null,
-    adjVolume: b.AdjVo?.toString()     ?? null,
-  }))
-
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    await db.insert(dailyPrices)
-      .values(rows.slice(i, i + BATCH_SIZE))
-      .onConflictDoUpdate({
-        target: [dailyPrices.code, dailyPrices.date],
-        set: {
-          open:      sql`excluded.open`,
-          high:      sql`excluded.high`,
-          low:       sql`excluded.low`,
-          close:     sql`excluded.close`,
-          volume:    sql`excluded.volume`,
-          turnover:  sql`excluded.turnover`,
-          adjFactor: sql`excluded.adj_factor`,
-          adjOpen:   sql`excluded.adj_open`,
-          adjHigh:   sql`excluded.adj_high`,
-          adjLow:    sql`excluded.adj_low`,
-          adjClose:  sql`excluded.adj_close`,
-          adjVolume: sql`excluded.adj_volume`,
-        },
-      })
-  }
+  const rows = bars.map(mapDailyPriceRow)
+  await upsertDailyPriceRows(db, rows)
   return rows.length
 }
 
@@ -409,14 +560,6 @@ export async function syncDailyPricesAll(db: Db, apiKey: string, date: string): 
 // 株価: 日付単位バルク取得（1日1リクエスト）
 // 財務: 銘柄単位（1銘柄1リクエスト）
 // Light プラン(60 req/min) 対応: sleep(1000ms) で ~50 req/min
-function datesBetween(from: string, to: string): string[] {
-  const dates: string[] = []
-  const end = new Date(to)
-  for (const d = new Date(from); d <= end; d.setDate(d.getDate() + 1)) {
-    dates.push(d.toISOString().slice(0, 10))
-  }
-  return dates
-}
 
 export async function syncAllStocks(
   db: Db,
@@ -431,7 +574,7 @@ export async function syncAllStocks(
   await sleep(1000)
 
   // 株価: 日付ごとに全銘柄一括取得（N日分 = N リクエスト）
-  const dates = datesBetween(from, to)
+  const dates = enumerateDates(from, to)
   console.log(`[sync] prices: start  dates=${dates.join(',')}`)
   let priceCount = 0
   for (const date of dates) {

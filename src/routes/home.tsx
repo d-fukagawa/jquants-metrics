@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { createDb } from '../db/client'
 import { searchStocks } from '../services/stockService'
+import { toCode4 } from '../utils/stockCode'
 
 export const homeRoute = new Hono<{ Bindings: Bindings }>()
 
@@ -46,7 +47,7 @@ homeRoute.get('/', async (c) => {
               </thead>
               <tbody>
                 {results.map((s) => {
-                  const code4 = s.code.slice(0, 4)
+                  const code4 = toCode4(s.code)
                   return (
                     <tr
                       key={s.code}

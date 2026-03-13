@@ -1,0 +1,1395 @@
+{
+  "id": "20d652e6-98c0-404c-80fc-e6be8a4701ef",
+  "prevId": "0bc9e6c6-c395-4509-adb3-f94201583ded",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.daily_prices": {
+      "name": "daily_prices",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "open": {
+          "name": "open",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "high": {
+          "name": "high",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "low": {
+          "name": "low",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "close": {
+          "name": "close",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "volume": {
+          "name": "volume",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "turnover": {
+          "name": "turnover",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adj_factor": {
+          "name": "adj_factor",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adj_open": {
+          "name": "adj_open",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adj_high": {
+          "name": "adj_high",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adj_low": {
+          "name": "adj_low",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adj_close": {
+          "name": "adj_close",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adj_volume": {
+          "name": "adj_volume",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_daily_prices_date": {
+          "name": "idx_daily_prices_date",
+          "columns": [
+            {
+              "expression": "date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "daily_prices_code_date_pk": {
+          "name": "daily_prices_code_date_pk",
+          "columns": [
+            "code",
+            "date"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.edinet_bridge_facts": {
+      "name": "edinet_bridge_facts",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "edinet_code": {
+          "name": "edinet_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fiscal_year": {
+          "name": "fiscal_year",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_type": {
+          "name": "period_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operating_profit": {
+          "name": "operating_profit",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pretax_profit": {
+          "name": "pretax_profit",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "net_profit": {
+          "name": "net_profit",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cfo": {
+          "name": "cfo",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "depreciation": {
+          "name": "depreciation",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "adjustment_items_json": {
+          "name": "adjustment_items_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disclosed_at": {
+          "name": "disclosed_at",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_doc_id": {
+          "name": "source_doc_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_edinet_bridge_facts_code": {
+          "name": "idx_edinet_bridge_facts_code",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_edinet_bridge_facts_disclosed_at": {
+          "name": "idx_edinet_bridge_facts_disclosed_at",
+          "columns": [
+            {
+              "expression": "disclosed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "edinet_bridge_facts_code_fiscal_year_period_type_pk": {
+          "name": "edinet_bridge_facts_code_fiscal_year_period_type_pk",
+          "columns": [
+            "code",
+            "fiscal_year",
+            "period_type"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.edinet_company_map": {
+      "name": "edinet_company_map",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "edinet_code": {
+          "name": "edinet_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_edinet_company_map_edinet_code": {
+          "name": "idx_edinet_company_map_edinet_code",
+          "columns": [
+            {
+              "expression": "edinet_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.edinet_filings": {
+      "name": "edinet_filings",
+      "schema": "",
+      "columns": {
+        "edinet_code": {
+          "name": "edinet_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "doc_id": {
+          "name": "doc_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "filing_date": {
+          "name": "filing_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_amendment": {
+          "name": "is_amendment",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_updated_at": {
+          "name": "source_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_edinet_filings_code_date": {
+          "name": "idx_edinet_filings_code_date",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "filing_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_edinet_filings_date": {
+          "name": "idx_edinet_filings_date",
+          "columns": [
+            {
+              "expression": "filing_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_edinet_filings_event_type": {
+          "name": "idx_edinet_filings_event_type",
+          "columns": [
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "edinet_filings_edinet_code_doc_id_pk": {
+          "name": "edinet_filings_edinet_code_doc_id_pk",
+          "columns": [
+            "edinet_code",
+            "doc_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.edinet_forecasts": {
+      "name": "edinet_forecasts",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "edinet_code": {
+          "name": "edinet_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fiscal_year": {
+          "name": "fiscal_year",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "horizon": {
+          "name": "horizon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sales_forecast": {
+          "name": "sales_forecast",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "op_forecast": {
+          "name": "op_forecast",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "np_forecast": {
+          "name": "np_forecast",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eps_forecast": {
+          "name": "eps_forecast",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disclosed_at": {
+          "name": "disclosed_at",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_doc_id": {
+          "name": "source_doc_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_edinet_forecasts_code": {
+          "name": "idx_edinet_forecasts_code",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_edinet_forecasts_disclosed_at": {
+          "name": "idx_edinet_forecasts_disclosed_at",
+          "columns": [
+            {
+              "expression": "disclosed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "edinet_forecasts_code_horizon_fiscal_year_pk": {
+          "name": "edinet_forecasts_code_horizon_fiscal_year_pk",
+          "columns": [
+            "code",
+            "horizon",
+            "fiscal_year"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.edinet_quality_scores": {
+      "name": "edinet_quality_scores",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "as_of_date": {
+          "name": "as_of_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quality_score": {
+          "name": "quality_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "components_json": {
+          "name": "components_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formula_text": {
+          "name": "formula_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_edinet_quality_scores_code": {
+          "name": "idx_edinet_quality_scores_code",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "edinet_quality_scores_code_as_of_date_pk": {
+          "name": "edinet_quality_scores_code_as_of_date_pk",
+          "columns": [
+            "code",
+            "as_of_date"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.edinet_sync_runs": {
+      "name": "edinet_sync_runs",
+      "schema": "",
+      "columns": {
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "target": {
+          "name": "target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "success": {
+          "name": "success",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "http_429_count": {
+          "name": "http_429_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "http_5xx_count": {
+          "name": "http_5xx_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "rows_synced": {
+          "name": "rows_synced",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_edinet_sync_runs_target_started": {
+          "name": "idx_edinet_sync_runs_target_started",
+          "columns": [
+            {
+              "expression": "target",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.edinet_text_scores": {
+      "name": "edinet_text_scores",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "as_of_date": {
+          "name": "as_of_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "anomaly_score": {
+          "name": "anomaly_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "components_json": {
+          "name": "components_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formula_text": {
+          "name": "formula_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_edinet_text_scores_code": {
+          "name": "idx_edinet_text_scores_code",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "edinet_text_scores_code_as_of_date_pk": {
+          "name": "edinet_text_scores_code_as_of_date_pk",
+          "columns": [
+            "code",
+            "as_of_date"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.financial_adjustments": {
+      "name": "financial_adjustments",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disc_no": {
+          "name": "disc_no",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disc_date": {
+          "name": "disc_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "item_key": {
+          "name": "item_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "direction": {
+          "name": "direction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_financial_adjustments_disc_date": {
+          "name": "idx_financial_adjustments_disc_date",
+          "columns": [
+            {
+              "expression": "disc_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_financial_adjustments_code": {
+          "name": "idx_financial_adjustments_code",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "financial_adjustments_code_disc_no_item_key_direction_pk": {
+          "name": "financial_adjustments_code_disc_no_item_key_direction_pk",
+          "columns": [
+            "code",
+            "disc_no",
+            "item_key",
+            "direction"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.financial_summary": {
+      "name": "financial_summary",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disc_no": {
+          "name": "disc_no",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disc_date": {
+          "name": "disc_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "doc_type": {
+          "name": "doc_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cur_per_type": {
+          "name": "cur_per_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sales": {
+          "name": "sales",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "op": {
+          "name": "op",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "np": {
+          "name": "np",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eps": {
+          "name": "eps",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bps": {
+          "name": "bps",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "equity": {
+          "name": "equity",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eq_ar": {
+          "name": "eq_ar",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_assets": {
+          "name": "total_assets",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cfo": {
+          "name": "cfo",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cash_eq": {
+          "name": "cash_eq",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sh_out_fy": {
+          "name": "sh_out_fy",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tr_sh_fy": {
+          "name": "tr_sh_fy",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "div_ann": {
+          "name": "div_ann",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "f_sales": {
+          "name": "f_sales",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "f_op": {
+          "name": "f_op",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "f_np": {
+          "name": "f_np",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "f_eps": {
+          "name": "f_eps",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "f_div_ann": {
+          "name": "f_div_ann",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "financial_summary_code_disc_no_pk": {
+          "name": "financial_summary_code_disc_no_pk",
+          "columns": [
+            "code",
+            "disc_no"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.fins_details": {
+      "name": "fins_details",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disc_no": {
+          "name": "disc_no",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disc_date": {
+          "name": "disc_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "doc_type": {
+          "name": "doc_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cur_per_type": {
+          "name": "cur_per_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "debt_current": {
+          "name": "debt_current",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "debt_non_curr": {
+          "name": "debt_non_curr",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dna": {
+          "name": "dna",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pretax_profit": {
+          "name": "pretax_profit",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tax_expense": {
+          "name": "tax_expense",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_fins_details_disc_date": {
+          "name": "idx_fins_details_disc_date",
+          "columns": [
+            {
+              "expression": "disc_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "fins_details_code_disc_no_pk": {
+          "name": "fins_details_code_disc_no_pk",
+          "columns": [
+            "code",
+            "disc_no"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.stock_master": {
+      "name": "stock_master",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "co_name": {
+          "name": "co_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "co_name_en": {
+          "name": "co_name_en",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sector17": {
+          "name": "sector17",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sector17_nm": {
+          "name": "sector17_nm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sector33": {
+          "name": "sector33",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sector33_nm": {
+          "name": "sector33_nm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scale_cat": {
+          "name": "scale_cat",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mkt": {
+          "name": "mkt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mkt_nm": {
+          "name": "mkt_nm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mrgn": {
+          "name": "mrgn",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mrgn_nm": {
+          "name": "mrgn_nm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.stock_memo_meta": {
+      "name": "stock_memo_meta",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "is_watched": {
+          "name": "is_watched",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_stock_memo_meta_watched": {
+          "name": "idx_stock_memo_meta_watched",
+          "columns": [
+            {
+              "expression": "is_watched",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_stock_memo_meta_updated_at": {
+          "name": "idx_stock_memo_meta_updated_at",
+          "columns": [
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.stock_memos": {
+      "name": "stock_memos",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_stock_memos_code": {
+          "name": "idx_stock_memos_code",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_stock_memos_updated_at": {
+          "name": "idx_stock_memos_updated_at",
+          "columns": [
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

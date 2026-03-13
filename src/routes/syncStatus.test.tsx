@@ -8,6 +8,8 @@ vi.mock('../db/client', () => ({ createDb: vi.fn().mockReturnValue({}) }))
 const ENV = {
   DATABASE_URL: 'postgres://test',
   JQUANTS_API_KEY: 'test-key',
+  EDINETDB_API_KEY: 'edinet-key',
+  EDINET_API_KEY: 'official-edinet-key',
   SYNC_SECRET: 'secret',
 }
 
@@ -40,6 +42,17 @@ describe('GET /sync-status', () => {
       finsDetailsCoveragePct: 85.7,
       ebitdaReadyCount: 3000,
       evEbitdaReadyCount: 2500,
+      edinetRunTotal: 20,
+      edinetRunSuccess: 18,
+      edinetSuccessRatePct: 90,
+      edinetLatestSuccessAt: '2026-03-13 00:00:00+00',
+      edinetHttp429Total: 2,
+      edinetHttp5xxTotal: 1,
+      edinetTimelineCodeCount: 800,
+      edinetForecastCodeCount: 700,
+      edinetBridgeCodeCount: 650,
+      edinetQualityCodeCount: 300,
+      edinetTextCodeCount: 250,
     })
 
     const res = await get('/')
@@ -52,6 +65,11 @@ describe('GET /sync-status', () => {
     expect(html).toContain('85.7%')
     expect(html).toContain('3,000')
     expect(html).toContain('2,500')
+    expect(html).toContain('90.0%')
+    expect(html).toContain('800')
+    expect(html).toContain('GitHub Actions')
+    expect(html).toContain('actions/workflows/daily-sync.yml')
+    expect(html).toContain('actions/workflows/backfill-financials.yml')
   })
 
   it('renders 未同期 when no data', async () => {
@@ -76,6 +94,17 @@ describe('GET /sync-status', () => {
       finsDetailsCoveragePct: null,
       ebitdaReadyCount: 0,
       evEbitdaReadyCount: 0,
+      edinetRunTotal: 0,
+      edinetRunSuccess: 0,
+      edinetSuccessRatePct: null,
+      edinetLatestSuccessAt: null,
+      edinetHttp429Total: 0,
+      edinetHttp5xxTotal: 0,
+      edinetTimelineCodeCount: 0,
+      edinetForecastCodeCount: 0,
+      edinetBridgeCodeCount: 0,
+      edinetQualityCodeCount: 0,
+      edinetTextCodeCount: 0,
     })
 
     const html = await (await get('/')).text()

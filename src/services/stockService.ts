@@ -1,4 +1,4 @@
-import { ilike, or } from 'drizzle-orm'
+import { eq, ilike, or } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { stockMaster } from '../db/schema'
 
@@ -23,7 +23,7 @@ export async function getStockByCode(db: Db, code5: string) {
   const rows = await db
     .select()
     .from(stockMaster)
-    .where(ilike(stockMaster.code, code5))
+    .where(eq(stockMaster.code, code5))
     .limit(1)
   return rows[0] ?? null
 }

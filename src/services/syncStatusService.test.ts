@@ -16,6 +16,8 @@ describe('getSyncStatusSummary', () => {
       .mockResolvedValueOnce({ rows: [{ latest_count: 3000 }] })
       .mockResolvedValueOnce({ rows: [{ ready_count: 3000 }] })
       .mockResolvedValueOnce({ rows: [{ ready_count: 2500 }] })
+      .mockResolvedValueOnce({ rows: [{ run_total: 20, run_success: 18, latest_success_at: '2026-03-13 00:00:00+00', http429_total: 2, http5xx_total: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ timeline_code_count: 800, forecast_code_count: 700, bridge_code_count: 650, quality_code_count: 300, text_code_count: 250 }] })
 
     const db = { execute } as unknown as Db
     const s = await getSyncStatusSummary(db)
@@ -31,6 +33,9 @@ describe('getSyncStatusSummary', () => {
     expect(s.finsDetailsCoveragePct).toBe(85.7)
     expect(s.ebitdaReadyCount).toBe(3000)
     expect(s.evEbitdaReadyCount).toBe(2500)
+    expect(s.edinetSuccessRatePct).toBe(90)
+    expect(s.edinetRunSuccess).toBe(18)
+    expect(s.edinetTimelineCodeCount).toBe(800)
   })
 
   it('handles empty tables', async () => {
@@ -44,6 +49,8 @@ describe('getSyncStatusSummary', () => {
       .mockResolvedValueOnce({ rows: [{ latest_count: 0 }] })
       .mockResolvedValueOnce({ rows: [{ ready_count: 0 }] })
       .mockResolvedValueOnce({ rows: [{ ready_count: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ run_total: 0, run_success: 0, latest_success_at: null, http429_total: 0, http5xx_total: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ timeline_code_count: 0, forecast_code_count: 0, bridge_code_count: 0, quality_code_count: 0, text_code_count: 0 }] })
 
     const db = { execute } as unknown as Db
     const s = await getSyncStatusSummary(db)
@@ -55,5 +62,6 @@ describe('getSyncStatusSummary', () => {
     expect(s.finsDetailsCoveragePct).toBeNull()
     expect(s.ebitdaReadyCount).toBe(0)
     expect(s.evEbitdaReadyCount).toBe(0)
+    expect(s.edinetSuccessRatePct).toBeNull()
   })
 })

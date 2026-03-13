@@ -59,6 +59,28 @@ function toDateOrNull(v: unknown): string | null {
   return null
 }
 
+function firstNonEmpty(obj: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const s = toStr(obj[key])
+    if (s !== null) return s
+  }
+  return null
+}
+
+function sumFields(obj: Record<string, unknown>, keys: readonly string[]): string | null {
+  let total = 0
+  let found = false
+  for (const key of keys) {
+    const s = toStr(obj[key])
+    if (s == null) continue
+    const n = Number(String(s).replace(/,/g, ''))
+    if (!Number.isFinite(n)) continue
+    total += n
+    found = true
+  }
+  return found ? String(total) : null
+}
+
 export async function searchCompanyByCode(apiKey: string, code4: string): Promise<EdinetSearchCompany[]> {
   const raw = await getJson(apiKey, '/search', { q: code4 })
   const rows = pickArray(raw)
@@ -112,20 +134,53 @@ export async function fetchCompanyForecasts(apiKey: string, edinetCode: string):
 export async function fetchCompanyBridgeFacts(apiKey: string, edinetCode: string): Promise<EdinetBridgeFact[]> {
   const raw = await getJson(apiKey, `/companies/${edinetCode}/financials`)
   const rows = pickArray(raw)
-  return rows.map((r: Record<string, unknown>) => ({
-    edinetCode,
-    code: toStr(r.code ?? r.localCode ?? r.LocalCode),
-    fiscalYear: toStr(r.fiscalYear ?? r.fiscal_year ?? r.periodEnd) ?? '',
-    periodType: toStr(r.periodType ?? r.period_type ?? r.period) ?? 'FY',
-    operatingProfit: toStr(r.operatingProfit ?? r.op ?? r.operating_profit ?? r.ordinary_income),
-    pretaxProfit: toStr(r.pretaxProfit ?? r.pretax_profit ?? r.profit_before_tax),
-    netProfit: toStr(r.netProfit ?? r.np ?? r.net_profit ?? r.net_income),
-    cfo: toStr(r.cfo ?? r.cashflowOperating ?? r.operating_cf ?? r.cf_operating),
-    depreciation: toStr(r.depreciation ?? r.dna ?? r.depreciation_and_amortization),
-    disclosedAt: toDateOrNull(r.disclosedAt ?? r.disclosed_at ?? r.filingDate ?? r.fiscal_year),
-    sourceDocId: toStr(r.sourceDocId ?? r.source_doc_id ?? r.docId),
-    adjustmentItems: (r.adjustmentItems ?? r.adjustment_items ?? null) as Record<string, unknown> | null,
-  })).filter(r => r.fiscalYear)
+  return rows.map((r: Record<string, unknown>) => {
+    const debtCurrent = firstNonEmpty(r, [
+      'ibd_current',
+      'interest_bearing_debt_current',
+      'debt_current',
+      'borrowings_current',
+      'short_term_borrowings',
+    ]) ?? sumFields(r, [
+      'short_term_borrowings',
+      'short_term_loans_payable',
+      'current_portion_of_long_term_borrowings',
+      'commercial_papers',
+      'current_portion_of_bonds',
+    ])
+
+    const debtNonCurr = firstNonEmpty(r, [
+      'ibd_noncurrent',
+      'interest_bearing_debt_noncurrent',
+      'debt_noncurrent',
+      'borrowings_noncurrent',
+      'long_term_borrowings',
+    ]) ?? sumFields(r, [
+      'long_term_borrowings',
+      'long_term_loans_payable',
+      'bonds_payable',
+      'lease_obligations_noncurrent',
+      'convertible_bonds',
+    ])
+
+    return {
+      edinetCode,
+      code: toStr(r.code ?? r.localCode ?? r.LocalCode),
+      fiscalYear: toStr(r.fiscalYear ?? r.fiscal_year ?? r.periodEnd) ?? '',
+      periodType: toStr(r.periodType ?? r.period_type ?? r.period) ?? 'FY',
+      operatingProfit: toStr(r.operatingProfit ?? r.op ?? r.operating_profit ?? r.ordinary_income),
+      pretaxProfit: toStr(r.pretaxProfit ?? r.pretax_profit ?? r.profit_before_tax),
+      taxExpense: toStr(r.taxExpense ?? r.tax_expense ?? r.income_tax_expense ?? r.income_taxes),
+      netProfit: toStr(r.netProfit ?? r.np ?? r.net_profit ?? r.net_income),
+      cfo: toStr(r.cfo ?? r.cashflowOperating ?? r.operating_cf ?? r.cf_operating),
+      depreciation: toStr(r.depreciation ?? r.dna ?? r.depreciation_and_amortization),
+      debtCurrent,
+      debtNonCurr,
+      disclosedAt: toDateOrNull(r.disclosedAt ?? r.disclosed_at ?? r.filingDate ?? r.fiscal_year),
+      sourceDocId: toStr(r.sourceDocId ?? r.source_doc_id ?? r.docId),
+      adjustmentItems: (r.adjustmentItems ?? r.adjustment_items ?? null) as Record<string, unknown> | null,
+    }
+  }).filter(r => r.fiscalYear)
 }
 
 function normalizeScore(input: number): number {

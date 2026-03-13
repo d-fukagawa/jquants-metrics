@@ -3,14 +3,9 @@ import type { Bindings } from '../types'
 import { createDb } from '../db/client'
 import { screenStocks, PAGE_SIZE } from '../services/screenService'
 import type { ScreenFilters } from '../services/screenService'
+import { parseOptionalNumber } from '../utils/number'
 
 export const screenRoute = new Hono<{ Bindings: Bindings }>()
-
-function parseNum(s: string | undefined): number | undefined {
-  if (!s || s.trim() === '') return undefined
-  const n = parseFloat(s)
-  return isNaN(n) ? undefined : n
-}
 
 const MKT_OPTIONS   = ['プライム', 'スタンダード', 'グロース']
 const SECTOR17_OPTIONS = [
@@ -29,32 +24,33 @@ const SORT_OPTIONS = [
 
 screenRoute.get('/', async (c) => {
   const q = (k: string) => c.req.query(k)
+  const num = (k: string) => parseOptionalNumber(q(k))
 
   const filters: ScreenFilters = {
-    perMin:          parseNum(q('per_min')),
-    perMax:          parseNum(q('per_max')),
-    pbrMin:          parseNum(q('pbr_min')),
-    pbrMax:          parseNum(q('pbr_max')),
-    roeMin:          parseNum(q('roe_min')),
-    roeMax:          parseNum(q('roe_max')),
-    divYieldMin:     parseNum(q('div_yield_min')),
-    divYieldMax:     parseNum(q('div_yield_max')),
-    eqArMin:         parseNum(q('eq_ar_min')),
-    eqArMax:         parseNum(q('eq_ar_max')),
-    psrMin:          parseNum(q('psr_min')),
-    psrMax:          parseNum(q('psr_max')),
-    evEbitdaMin:     parseNum(q('ev_ebitda_min')),
-    evEbitdaMax:     parseNum(q('ev_ebitda_max')),
-    evAdjustedEbitdaMin: parseNum(q('ev_adj_ebitda_min')),
-    evAdjustedEbitdaMax: parseNum(q('ev_adj_ebitda_max')),
-    netCashRatioMin: parseNum(q('nc_ratio_min')),
-    netCashRatioMax: parseNum(q('nc_ratio_max')),
+    perMin:          num('per_min'),
+    perMax:          num('per_max'),
+    pbrMin:          num('pbr_min'),
+    pbrMax:          num('pbr_max'),
+    roeMin:          num('roe_min'),
+    roeMax:          num('roe_max'),
+    divYieldMin:     num('div_yield_min'),
+    divYieldMax:     num('div_yield_max'),
+    eqArMin:         num('eq_ar_min'),
+    eqArMax:         num('eq_ar_max'),
+    psrMin:          num('psr_min'),
+    psrMax:          num('psr_max'),
+    evEbitdaMin:     num('ev_ebitda_min'),
+    evEbitdaMax:     num('ev_ebitda_max'),
+    evAdjustedEbitdaMin: num('ev_adj_ebitda_min'),
+    evAdjustedEbitdaMax: num('ev_adj_ebitda_max'),
+    netCashRatioMin: num('nc_ratio_min'),
+    netCashRatioMax: num('nc_ratio_max'),
     profitOnly:  q('profit_only') === '1',
     cfoPositive: q('cfo_positive') === '1',
     mkt:         c.req.queries('mkt') ?? [],
     sector17:    q('sector17') || undefined,
     sort:        (q('sort') as ScreenFilters['sort']) || 'per_asc',
-    page:        parseNum(q('page')) ?? 1,
+    page:        num('page') ?? 1,
   }
 
   const db               = createDb(c.env.DATABASE_URL)
@@ -65,24 +61,29 @@ screenRoute.get('/', async (c) => {
   // Build query string for pagination (preserves all filter params)
   function pageUrl(p: number) {
     const params = new URLSearchParams()
-    if (filters.perMin      != null) params.set('per_min',       String(filters.perMin))
-    if (filters.perMax      != null) params.set('per_max',       String(filters.perMax))
-    if (filters.pbrMin      != null) params.set('pbr_min',       String(filters.pbrMin))
-    if (filters.pbrMax      != null) params.set('pbr_max',       String(filters.pbrMax))
-    if (filters.roeMin      != null) params.set('roe_min',       String(filters.roeMin))
-    if (filters.roeMax      != null) params.set('roe_max',       String(filters.roeMax))
-    if (filters.divYieldMin != null) params.set('div_yield_min', String(filters.divYieldMin))
-    if (filters.divYieldMax != null) params.set('div_yield_max', String(filters.divYieldMax))
-    if (filters.eqArMin     != null) params.set('eq_ar_min',     String(filters.eqArMin))
-    if (filters.eqArMax     != null) params.set('eq_ar_max',     String(filters.eqArMax))
-    if (filters.psrMin          != null) params.set('psr_min',       String(filters.psrMin))
-    if (filters.psrMax          != null) params.set('psr_max',       String(filters.psrMax))
-    if (filters.evEbitdaMin     != null) params.set('ev_ebitda_min', String(filters.evEbitdaMin))
-    if (filters.evEbitdaMax     != null) params.set('ev_ebitda_max', String(filters.evEbitdaMax))
-    if (filters.evAdjustedEbitdaMin != null) params.set('ev_adj_ebitda_min', String(filters.evAdjustedEbitdaMin))
-    if (filters.evAdjustedEbitdaMax != null) params.set('ev_adj_ebitda_max', String(filters.evAdjustedEbitdaMax))
-    if (filters.netCashRatioMin != null) params.set('nc_ratio_min',  String(filters.netCashRatioMin))
-    if (filters.netCashRatioMax != null) params.set('nc_ratio_max',  String(filters.netCashRatioMax))
+    const numericParams: Array<[string, number | undefined]> = [
+      ['per_min', filters.perMin],
+      ['per_max', filters.perMax],
+      ['pbr_min', filters.pbrMin],
+      ['pbr_max', filters.pbrMax],
+      ['roe_min', filters.roeMin],
+      ['roe_max', filters.roeMax],
+      ['div_yield_min', filters.divYieldMin],
+      ['div_yield_max', filters.divYieldMax],
+      ['eq_ar_min', filters.eqArMin],
+      ['eq_ar_max', filters.eqArMax],
+      ['psr_min', filters.psrMin],
+      ['psr_max', filters.psrMax],
+      ['ev_ebitda_min', filters.evEbitdaMin],
+      ['ev_ebitda_max', filters.evEbitdaMax],
+      ['ev_adj_ebitda_min', filters.evAdjustedEbitdaMin],
+      ['ev_adj_ebitda_max', filters.evAdjustedEbitdaMax],
+      ['nc_ratio_min', filters.netCashRatioMin],
+      ['nc_ratio_max', filters.netCashRatioMax],
+    ]
+    for (const [key, value] of numericParams) {
+      if (value != null) params.set(key, String(value))
+    }
     if (filters.profitOnly)          params.set('profit_only',   '1')
     if (filters.cfoPositive)         params.set('cfo_positive',  '1')
     for (const m of (filters.mkt ?? [])) params.append('mkt', m)

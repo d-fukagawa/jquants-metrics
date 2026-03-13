@@ -120,21 +120,45 @@ export async function screenStocks(
       WHERE cur_per_type = 'FY'
       ORDER BY code, disc_date DESC
     ),
-    latest_details AS (
+    latest_jquants_details AS (
       SELECT DISTINCT ON (code)
         code,
-        COALESCE(debt_current::float, 0) AS debt_current,
-        COALESCE(debt_non_curr::float, 0) AS debt_non_curr,
+        debt_current::float AS debt_current,
+        debt_non_curr::float AS debt_non_curr,
         dna::float
       FROM fins_details
+      WHERE disc_no NOT LIKE 'EDINET:%'
       ORDER BY code, (dna IS NOT NULL) DESC, disc_date DESC
+    ),
+    latest_edinet_details AS (
+      SELECT DISTINCT ON (code)
+        code,
+        debt_current::float AS debt_current,
+        debt_non_curr::float AS debt_non_curr,
+        dna::float
+      FROM fins_details
+      WHERE disc_no LIKE 'EDINET:%'
+      ORDER BY code, disc_date DESC
+    ),
+    latest_details AS (
+      SELECT
+        COALESCE(j.code, e.code) AS code,
+        COALESCE(j.debt_current, e.debt_current, 0) AS debt_current,
+        COALESCE(j.debt_non_curr, e.debt_non_curr, 0) AS debt_non_curr,
+        COALESCE(j.dna, e.dna) AS dna
+      FROM latest_jquants_details j
+      FULL OUTER JOIN latest_edinet_details e
+        ON e.code = j.code
     ),
     latest_adjustment_disc AS (
       SELECT DISTINCT ON (code)
         code,
         disc_no
       FROM financial_adjustments
-      ORDER BY code, disc_date DESC
+      ORDER BY
+        code,
+        (CASE WHEN source = 'fins_details.statement' THEN 0 ELSE 1 END) ASC,
+        disc_date DESC
     ),
     adjustment_totals AS (
       SELECT
