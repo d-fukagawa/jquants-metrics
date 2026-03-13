@@ -11,7 +11,7 @@ export const renderer = jsxRenderer(({ children, wide }: { children: any; wide?:
       </head>
       <body>
         <header class="header">
-          <div class="header-inner" style={wide ? 'max-width:1280px' : undefined}>
+          <div class="header-inner">
             <a href="/" class="logo">jquants<span>-metrics</span></a>
             <nav class="nav">
               <a href="/" class="nav-link">ホーム</a>

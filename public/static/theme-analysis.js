@@ -4,6 +4,7 @@
   const volumeEl = document.getElementById('theme-volume-chart');
   const dualAxisToggleEl = document.getElementById('theme-price-dual-axis');
   const axisModeEl = document.getElementById('theme-price-axis-mode');
+  const volumeAxisModeEl = document.getElementById('theme-volume-axis-mode');
 
   if (!payloadEl || !priceEl || !volumeEl) return;
 
@@ -42,8 +43,6 @@
   const axisColor = '#3f3f46';
   const splitColor = '#27272a';
 
-  const candleSeries = [];
-  const volumeSeries = [];
   const stockModels = [];
 
   series.forEach((stock, index) => {
@@ -63,7 +62,9 @@
         return bar ? bar.close : null;
       })
       .filter((value) => Number.isFinite(value) && value > 0);
+    const validVolumeData = volData.filter((value) => Number.isFinite(value) && value > 0);
     const representativeClose = closeData.length > 0 ? closeData[closeData.length - 1] : Number.NaN;
+    const representativeVolume = validVolumeData.length > 0 ? validVolumeData[validVolumeData.length - 1] : Number.NaN;
     const color = colors[index % colors.length];
 
     stockModels.push({
@@ -73,13 +74,7 @@
       candleData,
       volData,
       representativeClose,
-    });
-
-    volumeSeries.push({
-      name: stock.name,
-      type: 'bar',
-      data: volData,
-      itemStyle: { color },
+      representativeVolume,
     });
   });
 
@@ -104,7 +99,7 @@
     };
   }
 
-  function calcAxisAssignment(preferDual) {
+  function calcAxisAssignment(preferDual, valueSelector) {
     const singleAxis = {
       useDual: false,
       axisByCode: new Map(stockModels.map((model) => [model.code, 0])),
@@ -112,11 +107,11 @@
     if (!preferDual || stockModels.length < 2) return singleAxis;
 
     const valid = stockModels.filter((model) =>
-      Number.isFinite(model.representativeClose) && model.representativeClose > 0
+      Number.isFinite(valueSelector(model)) && valueSelector(model) > 0
     );
     if (valid.length < 2) return singleAxis;
 
-    const prices = valid.map((model) => model.representativeClose);
+    const prices = valid.map((model) => valueSelector(model));
     const min = Math.min(...prices);
     const max = Math.max(...prices);
 
@@ -129,8 +124,8 @@
     let rightCount = 0;
 
     stockModels.forEach((model) => {
-      const price = Number.isFinite(model.representativeClose) && model.representativeClose > 0
-        ? model.representativeClose
+      const price = Number.isFinite(valueSelector(model)) && valueSelector(model) > 0
+        ? valueSelector(model)
         : boundary;
       const axisIndex = price >= boundary ? 0 : 1;
       axisByCode.set(model.code, axisIndex);
@@ -141,7 +136,11 @@
     if (leftCount === 0 || rightCount === 0) {
       leftCount = 0;
       rightCount = 0;
-      const sorted = [...stockModels].sort((a, b) => a.representativeClose - b.representativeClose);
+      const sorted = [...stockModels].sort((a, b) => {
+        const av = Number.isFinite(valueSelector(a)) ? valueSelector(a) : Number.POSITIVE_INFINITY;
+        const bv = Number.isFinite(valueSelector(b)) ? valueSelector(b) : Number.POSITIVE_INFINITY;
+        return av - bv;
+      });
       const split = Math.max(1, Math.floor(sorted.length / 2));
       sorted.forEach((model, idx) => {
         const axisIndex = idx < split ? 1 : 0;
@@ -156,7 +155,7 @@
   }
 
   function renderPriceChart(preferDual) {
-    const assignment = calcAxisAssignment(preferDual);
+    const assignment = calcAxisAssignment(preferDual, (model) => model.representativeClose);
     const candleSeries = stockModels.map((model) => ({
       name: model.name,
       type: 'candlestick',
@@ -209,42 +208,57 @@
     }
   }
 
-  volumeChart.setOption({
-    color: colors,
-    animation: false,
-    legend: {
-      top: 8,
-      textStyle: { color: textColor },
-    },
-    grid: {
-      left: 60,
-      right: 20,
-      top: 50,
-      bottom: 30,
-    },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-    },
-    xAxis: {
-      type: 'category',
-      data: categories,
-      axisLine: { lineStyle: { color: axisColor } },
-      axisLabel: { color: textColor },
-    },
-    yAxis: {
-      axisLine: { lineStyle: { color: axisColor } },
-      splitLine: { lineStyle: { color: splitColor } },
-      axisLabel: { color: textColor },
-    },
-    series: volumeSeries,
-  });
+  function renderVolumeChart(preferDual) {
+    const assignment = calcAxisAssignment(preferDual, (model) => model.representativeVolume);
+    const volumeSeries = stockModels.map((model) => ({
+      name: model.name,
+      type: 'bar',
+      yAxisIndex: assignment.useDual ? (assignment.axisByCode.get(model.code) || 0) : 0,
+      data: model.volData,
+      itemStyle: { color: model.color },
+    }));
+
+    volumeChart.setOption({
+      color: colors,
+      animation: false,
+      legend: {
+        top: 8,
+        textStyle: { color: textColor },
+      },
+      grid: {
+        left: 60,
+        right: assignment.useDual ? 64 : 20,
+        top: 50,
+        bottom: 30,
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+      },
+      xAxis: {
+        type: 'category',
+        data: categories,
+        axisLine: { lineStyle: { color: axisColor } },
+        axisLabel: { color: textColor },
+      },
+      yAxis: assignment.useDual
+        ? [yAxisBase('left', true), yAxisBase('right', false)]
+        : yAxisBase('left', true),
+      series: volumeSeries,
+    }, { notMerge: true });
+
+    if (volumeAxisModeEl) {
+      volumeAxisModeEl.textContent = assignment.useDual ? '二軸（自動）' : '単軸';
+    }
+  }
 
   renderPriceChart(dualAxisToggleEl ? dualAxisToggleEl.checked : true);
+  renderVolumeChart(dualAxisToggleEl ? dualAxisToggleEl.checked : true);
 
   if (dualAxisToggleEl) {
     dualAxisToggleEl.addEventListener('change', () => {
       renderPriceChart(dualAxisToggleEl.checked);
+      renderVolumeChart(dualAxisToggleEl.checked);
     });
   }
 

@@ -352,52 +352,59 @@ themesRoute.get('/:id', async (c) => {
         </div>
       </section>
 
-      <section class="theme-chart-grid">
-        <div class="card panel">
-          <div class="panel-header">
-            <span class="panel-title">複数銘柄株価チャート</span>
-            <div class="theme-price-axis-tools">
-              <label class="theme-axis-toggle" for="theme-price-dual-axis">
-                <input id="theme-price-dual-axis" type="checkbox" checked />
-                <span>二軸表示</span>
-              </label>
-              <span id="theme-price-axis-mode" class="theme-axis-mode">単軸</span>
+      <section class="theme-analysis-main">
+        <div class="theme-analysis-charts">
+          <section class="theme-chart-grid">
+            <div class="card panel">
+              <div class="panel-header">
+                <span class="panel-title">複数銘柄株価チャート</span>
+                <div class="theme-price-axis-tools">
+                  <label class="theme-axis-toggle" for="theme-price-dual-axis">
+                    <input id="theme-price-dual-axis" type="checkbox" checked />
+                    <span>二軸表示</span>
+                  </label>
+                  <span id="theme-price-axis-mode" class="theme-axis-mode">単軸</span>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div id="theme-candlestick-chart" class="theme-chart"></div>
+              </div>
             </div>
-          </div>
-          <div class="panel-body">
-            <div id="theme-candlestick-chart" class="theme-chart"></div>
-          </div>
+            <div class="card panel">
+              <div class="panel-header">
+                <span class="panel-title">複数銘柄出来高グラフ</span>
+                <span id="theme-volume-axis-mode" class="theme-axis-mode">単軸</span>
+              </div>
+              <div class="panel-body">
+                <div id="theme-volume-chart" class="theme-chart theme-chart-volume"></div>
+              </div>
+            </div>
+          </section>
         </div>
-        <div class="card panel">
-          <div class="panel-header">
-            <span class="panel-title">複数銘柄出来高グラフ</span>
-          </div>
-          <div class="panel-body">
-            <div id="theme-volume-chart" class="theme-chart theme-chart-volume"></div>
-          </div>
-        </div>
-      </section>
 
-      <section class="card panel">
-        <div class="panel-header">
-          <span class="panel-title">検討メモ</span>
-        </div>
-        <div class="panel-body">
-          <form method="post" action={`/themes/${id}/memo`} class="theme-memo-form">
-            <input type="hidden" name="g" value={g} />
-            <input type="hidden" name="from" value={from} />
-            <input type="hidden" name="to" value={to} />
-            <textarea
-              class="theme-memo-textarea"
-              name="memo"
-              maxlength={10000}
-              placeholder="テーマ全体の検討メモを入力"
-            >{detail.theme.memo}</textarea>
-            <div class="theme-form-actions">
-              <button class="btn btn-primary" type="submit">保存</button>
+        <aside class="theme-analysis-memo">
+          <section class="card panel theme-memo-panel">
+            <div class="panel-header">
+              <span class="panel-title">検討メモ</span>
             </div>
-          </form>
-        </div>
+            <div class="panel-body">
+              <form method="post" action={`/themes/${id}/memo`} class="theme-memo-form">
+                <input type="hidden" name="g" value={g} />
+                <input type="hidden" name="from" value={from} />
+                <input type="hidden" name="to" value={to} />
+                <textarea
+                  class="theme-memo-textarea"
+                  name="memo"
+                  maxlength={10000}
+                  placeholder="テーマ全体の検討メモを入力"
+                >{detail.theme.memo}</textarea>
+                <div class="theme-form-actions">
+                  <button class="btn btn-primary" type="submit">保存</button>
+                </div>
+              </form>
+            </div>
+          </section>
+        </aside>
       </section>
 
       <div id="theme-analysis-data" data-payload={encoded}></div>
