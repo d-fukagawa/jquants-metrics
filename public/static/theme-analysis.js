@@ -269,6 +269,12 @@
     });
   }
 
+  window.__themeAnalysisCharts = {
+    priceChart,
+    volumeChart,
+    payload,
+  };
+
   function resize() {
     priceChart.resize();
     volumeChart.resize();

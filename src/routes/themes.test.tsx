@@ -138,9 +138,11 @@ describe('themesRoute', () => {
 
     expect(res.status).toBe(200)
     expect(html).toContain('参照ビュー')
+    expect(html).toContain('Markdown出力')
     expect(html).toContain('分析ノート一覧')
     expect(html).toContain('需要はQ3がピーク想定')
     expect(html).not.toContain('/static/theme-notes.js')
+    expect(html).toContain('/static/theme-markdown-export.js')
   })
 
   it('GET /:id returns 400 for invalid date range', async () => {

@@ -407,6 +407,21 @@ themesRoute.get('/:id', async (c) => {
   const series = await listThemeSeries(db, detail.stocks, from, to, g)
   const notes = parseThemeNotes(detail.theme.memo)
   const initialNotes = encodeURIComponent(JSON.stringify(notes))
+  const exportPayload = encodeURIComponent(JSON.stringify({
+    themeName: detail.theme.name,
+    dateFrom: from,
+    dateTo: to,
+    timeframe: granularityLabel(g),
+    tickerList: detail.stocks.map(stock => stock.coName ?? stock.code4),
+    notes: notes.map((note, index) => ({
+      index: index + 1,
+      label: note.label || '未設定',
+      title: `ノート${index + 1}`,
+      body: note.text,
+    })),
+    priceChartPath: './images/price_chart.png',
+    volumeChartPath: './images/volume_chart.png',
+  }))
   const encoded = encodeURIComponent(JSON.stringify({
     themeName: detail.theme.name,
     granularity: g,
@@ -507,6 +522,7 @@ themesRoute.get('/:id', async (c) => {
           <section class="card panel">
             <div class="panel-header">
               <span class="panel-title">ヘッダ</span>
+              <button id="theme-export-markdown-btn" type="button" class="btn-sm">Markdown出力</button>
             </div>
             <div class="panel-body">
               <div class="theme-input-meta-grid">
@@ -587,9 +603,12 @@ themesRoute.get('/:id', async (c) => {
       )}
 
       <div id="theme-analysis-data" data-payload={encoded}></div>
+      {view === 'input' && <div id="theme-markdown-export-data" data-payload={exportPayload}></div>}
       {view === 'edit' && <script src="/static/theme-notes.js"></script>}
       <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
       <script src="/static/theme-analysis.js"></script>
+      {view === 'input' && <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>}
+      {view === 'input' && <script src="/static/theme-markdown-export.js"></script>}
     </div>,
     { wide: true },
   )
