@@ -2,6 +2,8 @@
   const payloadEl = document.getElementById('theme-analysis-data');
   const priceEl = document.getElementById('theme-candlestick-chart');
   const volumeEl = document.getElementById('theme-volume-chart');
+  const dualAxisToggleEl = document.getElementById('theme-price-dual-axis');
+  const axisModeEl = document.getElementById('theme-price-axis-mode');
 
   if (!payloadEl || !priceEl || !volumeEl) return;
 
@@ -42,6 +44,7 @@
 
   const candleSeries = [];
   const volumeSeries = [];
+  const stockModels = [];
 
   series.forEach((stock, index) => {
     const map = new Map((stock.bars || []).map((bar) => [bar.date, bar]));
@@ -54,18 +57,22 @@
       const bar = map.get(date);
       return bar ? bar.volume : 0;
     });
+    const closeData = categories
+      .map((date) => {
+        const bar = map.get(date);
+        return bar ? bar.close : null;
+      })
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const representativeClose = closeData.length > 0 ? closeData[closeData.length - 1] : Number.NaN;
     const color = colors[index % colors.length];
 
-    candleSeries.push({
+    stockModels.push({
+      code: stock.code,
       name: stock.name,
-      type: 'candlestick',
-      data: candleData,
-      itemStyle: {
-        color,
-        color0: '#f5f5f5',
-        borderColor: color,
-        borderColor0: color,
-      },
+      color,
+      candleData,
+      volData,
+      representativeClose,
     });
 
     volumeSeries.push({
@@ -79,42 +86,128 @@
   const priceChart = window.echarts.init(priceEl);
   const volumeChart = window.echarts.init(volumeEl);
 
-  priceChart.setOption({
-    color: colors,
-    animation: false,
-    legend: {
-      top: 8,
-      textStyle: { color: textColor },
-    },
-    grid: {
-      left: 60,
-      right: 20,
-      top: 50,
-      bottom: 40,
-    },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' },
-    },
-    xAxis: {
-      type: 'category',
-      data: categories,
-      boundaryGap: true,
-      axisLine: { lineStyle: { color: axisColor } },
-      axisLabel: { color: textColor },
-    },
-    yAxis: {
+  function axisLabelFormatter(value) {
+    return Number.isFinite(value) ? value.toLocaleString('ja-JP') : '';
+  }
+
+  function yAxisBase(position, showSplitLine) {
+    return {
+      type: 'value',
+      position,
       scale: true,
       axisLine: { lineStyle: { color: axisColor } },
-      splitLine: { lineStyle: { color: splitColor } },
-      axisLabel: { color: textColor },
-    },
-    dataZoom: [
-      { type: 'inside', xAxisIndex: [0] },
-      { show: true, xAxisIndex: [0], type: 'slider', bottom: 10, height: 16 },
-    ],
-    series: candleSeries,
-  });
+      splitLine: showSplitLine ? { lineStyle: { color: splitColor } } : { show: false },
+      axisLabel: {
+        color: textColor,
+        formatter: axisLabelFormatter,
+      },
+    };
+  }
+
+  function calcAxisAssignment(preferDual) {
+    const singleAxis = {
+      useDual: false,
+      axisByCode: new Map(stockModels.map((model) => [model.code, 0])),
+    };
+    if (!preferDual || stockModels.length < 2) return singleAxis;
+
+    const valid = stockModels.filter((model) =>
+      Number.isFinite(model.representativeClose) && model.representativeClose > 0
+    );
+    if (valid.length < 2) return singleAxis;
+
+    const prices = valid.map((model) => model.representativeClose);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+
+    // 価格差が小さい場合は単軸のままにする
+    if (!(max > min * 2.5)) return singleAxis;
+
+    const boundary = Math.sqrt(min * max);
+    const axisByCode = new Map();
+    let leftCount = 0;
+    let rightCount = 0;
+
+    stockModels.forEach((model) => {
+      const price = Number.isFinite(model.representativeClose) && model.representativeClose > 0
+        ? model.representativeClose
+        : boundary;
+      const axisIndex = price >= boundary ? 0 : 1;
+      axisByCode.set(model.code, axisIndex);
+      if (axisIndex === 0) leftCount += 1;
+      if (axisIndex === 1) rightCount += 1;
+    });
+
+    if (leftCount === 0 || rightCount === 0) {
+      leftCount = 0;
+      rightCount = 0;
+      const sorted = [...stockModels].sort((a, b) => a.representativeClose - b.representativeClose);
+      const split = Math.max(1, Math.floor(sorted.length / 2));
+      sorted.forEach((model, idx) => {
+        const axisIndex = idx < split ? 1 : 0;
+        axisByCode.set(model.code, axisIndex);
+        if (axisIndex === 0) leftCount += 1;
+        if (axisIndex === 1) rightCount += 1;
+      });
+    }
+
+    if (leftCount === 0 || rightCount === 0) return singleAxis;
+    return { useDual: true, axisByCode };
+  }
+
+  function renderPriceChart(preferDual) {
+    const assignment = calcAxisAssignment(preferDual);
+    const candleSeries = stockModels.map((model) => ({
+      name: model.name,
+      type: 'candlestick',
+      yAxisIndex: assignment.useDual ? (assignment.axisByCode.get(model.code) || 0) : 0,
+      data: model.candleData,
+      itemStyle: {
+        color: model.color,
+        color0: '#f5f5f5',
+        borderColor: model.color,
+        borderColor0: model.color,
+      },
+    }));
+
+    priceChart.setOption({
+      color: colors,
+      animation: false,
+      legend: {
+        top: 8,
+        textStyle: { color: textColor },
+      },
+      grid: {
+        left: 60,
+        right: assignment.useDual ? 64 : 20,
+        top: 50,
+        bottom: 40,
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' },
+      },
+      xAxis: {
+        type: 'category',
+        data: categories,
+        boundaryGap: true,
+        axisLine: { lineStyle: { color: axisColor } },
+        axisLabel: { color: textColor },
+      },
+      yAxis: assignment.useDual
+        ? [yAxisBase('left', true), yAxisBase('right', false)]
+        : yAxisBase('left', true),
+      dataZoom: [
+        { type: 'inside', xAxisIndex: [0] },
+        { show: true, xAxisIndex: [0], type: 'slider', bottom: 10, height: 16 },
+      ],
+      series: candleSeries,
+    }, { notMerge: true });
+
+    if (axisModeEl) {
+      axisModeEl.textContent = assignment.useDual ? '二軸（自動）' : '単軸';
+    }
+  }
 
   volumeChart.setOption({
     color: colors,
@@ -146,6 +239,14 @@
     },
     series: volumeSeries,
   });
+
+  renderPriceChart(dualAxisToggleEl ? dualAxisToggleEl.checked : true);
+
+  if (dualAxisToggleEl) {
+    dualAxisToggleEl.addEventListener('change', () => {
+      renderPriceChart(dualAxisToggleEl.checked);
+    });
+  }
 
   function resize() {
     priceChart.resize();

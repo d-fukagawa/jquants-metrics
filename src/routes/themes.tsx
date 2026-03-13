@@ -356,6 +356,13 @@ themesRoute.get('/:id', async (c) => {
         <div class="card panel">
           <div class="panel-header">
             <span class="panel-title">複数銘柄株価チャート</span>
+            <div class="theme-price-axis-tools">
+              <label class="theme-axis-toggle" for="theme-price-dual-axis">
+                <input id="theme-price-dual-axis" type="checkbox" checked />
+                <span>二軸表示</span>
+              </label>
+              <span id="theme-price-axis-mode" class="theme-axis-mode">単軸</span>
+            </div>
           </div>
           <div class="panel-body">
             <div id="theme-candlestick-chart" class="theme-chart"></div>
