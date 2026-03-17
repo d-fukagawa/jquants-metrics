@@ -32,8 +32,10 @@ import { sql } from 'drizzle-orm'
 const databaseUrl = process.env.DATABASE_URL
 const apiKey = process.env.EDINETDB_API_KEY
 if (!databaseUrl || !apiKey) {
-  console.error('ERROR: DATABASE_URL and EDINETDB_API_KEY are required')
-  process.exit(1)
+  if (!process.env.VITEST) {
+    console.error('ERROR: DATABASE_URL and EDINETDB_API_KEY are required')
+    process.exit(1)
+  }
 }
 
 const mode = (process.env.EDINET_SYNC_MODE ?? 'daily').toLowerCase() === 'weekly' ? 'weekly' : 'daily'
@@ -50,7 +52,7 @@ const bootstrapCodes = (process.env.WATCHLIST_BOOTSTRAP_CODES ?? '')
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
-function isoDateJst(deltaDays = 0): string {
+export function isoDateJst(deltaDays = 0): string {
   const now = new Date()
   const jst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
   jst.setDate(jst.getDate() + deltaDays)
@@ -60,29 +62,34 @@ function isoDateJst(deltaDays = 0): string {
   return `${y}-${m}-${d}`
 }
 
-async function main() {
+export async function main() {
   const db = createDb(databaseUrl)
 
   for (const c4 of bootstrapCodes) {
     await db.execute(sql`
-      INSERT INTO watchlist (code, note, created_at, updated_at)
-      VALUES (${`${c4}0`}, 'bootstrap', NOW(), NOW())
+      INSERT INTO stock_memo_meta (code, is_watched, created_at, updated_at)
+      VALUES (${`${c4}0`}, true, NOW(), NOW())
       ON CONFLICT (code)
-      DO UPDATE SET note = EXCLUDED.note, updated_at = EXCLUDED.updated_at
+      DO UPDATE SET is_watched = true, updated_at = EXCLUDED.updated_at
     `)
   }
   if (bootstrapCodes.length > 0) {
     console.log(`[edinet-watch-sync] bootstrap inserted=${bootstrapCodes.length}`)
   }
 
-  const wl = await db.execute(sql`SELECT code FROM watchlist ORDER BY created_at DESC`)
-  const uniqueCodes = [...new Set((wl.rows as Array<{ code: string }>).map(w => w.code))]
+  const wl = await db.execute(sql`SELECT code FROM stock_memo_meta WHERE is_watched = true ORDER BY created_at DESC`)
+  const watchlistCodes = (wl.rows as Array<{ code: string }>).map(w => w.code)
+
+  const th = await db.execute(sql`SELECT DISTINCT code FROM theme_stocks`)
+  const themeCodes = (th.rows as Array<{ code: string }>).map(r => r.code)
+
+  const uniqueCodes = [...new Set([...watchlistCodes, ...themeCodes])]
   if (uniqueCodes.length === 0) {
-    console.log('[edinet-watch-sync] watchlist is empty; nothing to sync')
+    console.log('[edinet-watch-sync] watchlist and themes are empty; nothing to sync')
     return
   }
 
-  console.log(`[edinet-watch-sync] mode=${mode} watchlist=${uniqueCodes.length}`)
+  console.log(`[edinet-watch-sync] mode=${mode} watchlist=${watchlistCodes.length} theme=${themeCodes.length} total=${uniqueCodes.length}`)
 
   let timelineRows = 0
   let qualityRows = 0
@@ -168,4 +175,6 @@ async function main() {
   )
 }
 
-await main()
+if (!process.env.VITEST) {
+  await main()
+}
