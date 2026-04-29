@@ -32,7 +32,8 @@
       "style": {
         "noNonNullAssertion": "off",
         "useImportType": "off",
-        "useExponentiationOperator": "off"
+        "useExponentiationOperator": "off",
+        "useShorthandFunctionType": "off"
       },
       "correctness": {
         "noUnusedVariables": "off",
