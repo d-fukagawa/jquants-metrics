@@ -4,10 +4,16 @@
 
 プロジェクト計画: @doc/plan.md
 技術スタック・スキーマ詳細: @doc/plan.md
+互換契約 (壊してはいけない公開面): @doc/contracts/README.md
 
 ## 開発コマンド
 
 ```bash
+bin/verify           # 最終検証 (biome + tsc + vitest + build)。PR 前に必ず通す。
+bin/lint             # biome check + tsc --noEmit
+bin/test             # vitest run
+bin/setup            # npm ci
+
 npm run dev          # Vite dev server（ローカル開発）
 npm run build        # ビルド
 npm run preview      # wrangler pages dev（本番相当）
