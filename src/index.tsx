@@ -3,6 +3,7 @@ import { renderer } from './renderer'
 import type { Bindings } from './types'
 import { homeRoute }   from './routes/home'
 import { stockRoute }  from './routes/stock'
+import { stockVerdictRoute } from './routes/stock-verdict'
 import { syncRoute }   from './routes/sync'
 import { screenRoute } from './routes/screen'
 import { syncStatusRoute } from './routes/syncStatus'
@@ -20,6 +21,7 @@ app.use(renderer)
 
 app.route('/',         homeRoute)
 app.route('/stock',    stockRoute)
+app.route('/stock',    stockVerdictRoute)
 app.route('/api/sync', syncRoute)
 app.route('/screen',   screenRoute)
 app.route('/sync-status', syncStatusRoute)

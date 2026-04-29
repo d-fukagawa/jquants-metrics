@@ -105,6 +105,11 @@ stockRoute.get('/:code', async (c) => {
         <span>{code4display} {stock.coName}</span>
       </nav>
 
+      <div class="verdict-tabs">
+        <a class="btn-sm active" href={`/stock/${code4display}`}>概要</a>
+        <a class="btn-sm" href={`/stock/${code4display}/verdict`}>バリュエーション判定</a>
+      </div>
+
       {/* Hero */}
       <div class="stock-hero">
         <div>
