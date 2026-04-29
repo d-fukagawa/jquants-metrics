@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Run the full test suite once (no watch).
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+npx vitest run

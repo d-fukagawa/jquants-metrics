@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Final verification entrypoint.
+# This is the single gate human and CI both go through.
+# It assumes dependencies are installed (run bin/setup first if needed).
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+bash bin/lint
+bash bin/test
+npm run build
