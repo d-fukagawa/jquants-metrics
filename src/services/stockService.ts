@@ -19,7 +19,7 @@ export async function searchStocks(db: Db, q: string) {
 }
 
 // 5桁コードで1件取得（例: "72030"）
-export async function getStockByCode(db: Db, code5: string) {
+export async function getStockByCode(db: Db, code5: string): Promise<typeof stockMaster.$inferSelect | null> {
   const rows = await db
     .select()
     .from(stockMaster)

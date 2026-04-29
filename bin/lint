@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Static checks. Currently: biome only.
-# tsc --noEmit will be added once existing type errors are fixed (separate PR).
+# Static checks: lint + typecheck.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 npx biome check .
+npx tsc --noEmit

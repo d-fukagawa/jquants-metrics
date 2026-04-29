@@ -63,7 +63,7 @@ describe('themesRoute', () => {
 
     const res = await themesRoute.request('/stock-search?q=トヨタ', { method: 'GET' }, ENV)
     expect(res.status).toBe(200)
-    const json = await res.json()
+    const json = (await res.json()) as { rows: Array<{ code4: string }> }
     expect(json.rows[0].code4).toBe('7203')
   })
 

@@ -88,7 +88,7 @@ describe('themeService CRUD', () => {
     const from = vi.fn().mockReturnValue({ where })
     const select = vi.fn().mockReturnValue({ from })
 
-    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('theme-1')
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('theme-1' as ReturnType<Crypto['randomUUID']>)
 
     const db = { select, insert, delete: deleteFn } as unknown as Db
     const id = await createTheme(db, {
@@ -113,7 +113,7 @@ describe('themeService CRUD', () => {
     const from = vi.fn().mockReturnValue({ where })
     const select = vi.fn().mockReturnValue({ from })
 
-    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('theme-rollback')
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('theme-rollback' as ReturnType<Crypto['randomUUID']>)
 
     const db = { select, insert, delete: deleteFn } as unknown as Db
     await expect(createTheme(db, {

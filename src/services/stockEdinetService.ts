@@ -31,7 +31,7 @@ export async function getLatestForecasts(db: Db, code5: string) {
   return { next, next2 }
 }
 
-export async function getLatestBridgeFact(db: Db, code5: string) {
+export async function getLatestBridgeFact(db: Db, code5: string): Promise<typeof edinetBridgeFacts.$inferSelect | null> {
   const rows = await db
     .select()
     .from(edinetBridgeFacts)
@@ -41,7 +41,7 @@ export async function getLatestBridgeFact(db: Db, code5: string) {
   return rows[0] ?? null
 }
 
-export async function getLatestQualityScore(db: Db, code5: string) {
+export async function getLatestQualityScore(db: Db, code5: string): Promise<typeof edinetQualityScores.$inferSelect | null> {
   const rows = await db
     .select()
     .from(edinetQualityScores)
@@ -51,7 +51,7 @@ export async function getLatestQualityScore(db: Db, code5: string) {
   return rows[0] ?? null
 }
 
-export async function getLatestTextScore(db: Db, code5: string) {
+export async function getLatestTextScore(db: Db, code5: string): Promise<typeof edinetTextScores.$inferSelect | null> {
   const rows = await db
     .select()
     .from(edinetTextScores)

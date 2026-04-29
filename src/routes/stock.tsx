@@ -173,7 +173,8 @@ stockRoute.get('/:code', async (c) => {
               <tbody>
                 {recentPrices.map((p, i) => {
                   const c_  = p.adjClose ? parseFloat(p.adjClose) : null
-                  const prev = recentPrices[i + 1]?.adjClose ? parseFloat(recentPrices[i + 1].adjClose) : null
+                  const prevAdjClose = recentPrices[i + 1]?.adjClose
+                  const prev = prevAdjClose ? parseFloat(prevAdjClose) : null
                   const chg  = c_ !== null && prev !== null ? c_ - prev : null
                   const pct  = chg !== null && prev ? (chg / prev) * 100 : null
                   const up   = chg !== null && chg >= 0

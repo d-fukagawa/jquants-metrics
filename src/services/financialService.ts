@@ -98,7 +98,7 @@ export type FinsDetailRow = Awaited<ReturnType<typeof getFinsDetailsLatest>>
 export type FinancialAdjustmentRow = Awaited<ReturnType<typeof getFinancialAdjustmentsLatest>>[number]
 
 // 最新の fins_details レコードを返す（なければ null）
-export async function getFinsDetailsLatest(db: Db, code5: string) {
+export async function getFinsDetailsLatest(db: Db, code5: string): Promise<typeof finsDetails.$inferSelect | null> {
   const jquantsRows = await db
     .select()
     .from(finsDetails)

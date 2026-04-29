@@ -111,7 +111,7 @@ describe('main', () => {
     await main()
 
     expect(syncEdinetTimeline).toHaveBeenCalledTimes(1)
-    expect(syncEdinetTimeline.mock.calls[0][2]).toBe('72030')
+    expect(vi.mocked(syncEdinetTimeline).mock.calls[0][2]).toBe('72030')
   })
 
   it('テーマ株のコードに対しても syncEdinetTimeline を呼ぶ', async () => {
@@ -123,7 +123,7 @@ describe('main', () => {
     await main()
 
     expect(syncEdinetTimeline).toHaveBeenCalledTimes(1)
-    expect(syncEdinetTimeline.mock.calls[0][2]).toBe('67580')
+    expect(vi.mocked(syncEdinetTimeline).mock.calls[0][2]).toBe('67580')
   })
 
   it('ウォッチリストとテーマ株を合算したコードを処理する', async () => {
@@ -134,7 +134,7 @@ describe('main', () => {
     await main()
 
     expect(syncEdinetTimeline).toHaveBeenCalledTimes(2)
-    const calledCodes = syncEdinetTimeline.mock.calls.map(c => c[2])
+    const calledCodes = vi.mocked(syncEdinetTimeline).mock.calls.map(c => c[2])
     expect(calledCodes).toContain('72030')
     expect(calledCodes).toContain('67580')
   })
@@ -149,7 +149,7 @@ describe('main', () => {
 
     // '72030' は重複排除されて 1 回のみ、計 2 コード
     expect(syncEdinetTimeline).toHaveBeenCalledTimes(2)
-    const calledCodes = syncEdinetTimeline.mock.calls.map(c => c[2])
+    const calledCodes = vi.mocked(syncEdinetTimeline).mock.calls.map(c => c[2])
     expect(calledCodes.filter(c => c === '72030')).toHaveLength(1)
   })
 
@@ -161,7 +161,7 @@ describe('main', () => {
     await main()
 
     expect(syncEdinetQualityScores).toHaveBeenCalledTimes(1)
-    expect(syncEdinetQualityScores.mock.calls[0][2]).toBe('72030')
+    expect(vi.mocked(syncEdinetQualityScores).mock.calls[0][2]).toBe('72030')
     expect(syncEdinetTextScores).toHaveBeenCalledTimes(1)
     expect(syncEdinetBridge).toHaveBeenCalledTimes(1)
   })

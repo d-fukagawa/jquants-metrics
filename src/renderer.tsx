@@ -1,6 +1,12 @@
 import { jsxRenderer } from 'hono/jsx-renderer'
 
-export const renderer = jsxRenderer(({ children, wide }: { children: any; wide?: boolean }) => {
+declare module 'hono' {
+  interface ContextRenderer {
+    (content: string | Promise<string>, props?: { wide?: boolean }): Response
+  }
+}
+
+export const renderer = jsxRenderer(({ children, wide }: { children?: any; wide?: boolean }) => {
   return (
     <html lang="ja">
       <head>
