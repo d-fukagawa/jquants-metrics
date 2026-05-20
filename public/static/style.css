@@ -492,6 +492,29 @@ tbody tr:hover { background: var(--muted); }
   font-variant-numeric: tabular-nums;
 }
 
+.theme-summary-sort-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.theme-summary-sort-link:hover {
+  color: var(--foreground);
+}
+
+.theme-summary-sort-link.active {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.theme-summary-sort-mark {
+  font-size: 10px;
+  line-height: 1;
+}
+
 .theme-summary-score {
   display: inline-flex;
   align-items: center;

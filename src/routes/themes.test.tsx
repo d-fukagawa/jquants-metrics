@@ -99,11 +99,30 @@ describe('themesRoute', () => {
     const html = await res.text()
 
     expect(res.status).toBe(200)
-    expect(themeSummaryService.listThemeSummaries).toHaveBeenCalledWith({}, { scope: 'themes' })
+    expect(themeSummaryService.listThemeSummaries).toHaveBeenCalledWith({}, {
+      scope: 'themes',
+      sort: 'turnoverRatio',
+      direction: 'desc',
+    })
     expect(html).toContain('テーマサマリー')
     expect(html).toContain('半導体')
     expect(html).toContain('勢いあり・資金流入')
     expect(html).toContain('+8.0%')
+    expect(html).toContain('/themes/summary?scope=themes&amp;sort=return20d&amp;dir=desc')
+    expect(html).toContain('/themes/summary?scope=themes&amp;sort=turnoverRatio&amp;dir=asc')
+  })
+
+  it('GET /summary passes sort query to service', async () => {
+    vi.mocked(themeSummaryService.listThemeSummaries).mockResolvedValue([])
+
+    const res = await themesRoute.request('/summary?scope=sector17&sort=return20d&dir=asc', { method: 'GET' }, ENV)
+
+    expect(res.status).toBe(200)
+    expect(themeSummaryService.listThemeSummaries).toHaveBeenCalledWith({}, {
+      scope: 'sector17',
+      sort: 'return20d',
+      direction: 'asc',
+    })
   })
 
   it('POST / creates and redirects', async () => {

@@ -4,6 +4,7 @@ import {
   calcThemeSummaryScores,
   judgeThemeSummary,
   listThemeSummaries,
+  sortThemeSummaryRows,
 } from './themeSummaryService'
 
 describe('themeSummaryService scoring', () => {
@@ -59,7 +60,7 @@ describe('themeSummaryService listThemeSummaries', () => {
     })
     const db = { execute } as unknown as Db
 
-    const rows = await listThemeSummaries(db, { scope: 'themes' })
+    const rows = await listThemeSummaries(db, { scope: 'themes', sort: 'return20d', direction: 'desc' })
 
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
@@ -73,5 +74,47 @@ describe('themeSummaryService listThemeSummaries', () => {
       status: '勢いあり・資金流入',
       statusTone: 'strong',
     })
+  })
+})
+
+describe('themeSummaryService sortThemeSummaryRows', () => {
+  const baseRow = {
+    groupType: 'themes' as const,
+    groupId: 'base',
+    groupName: 'base',
+    stockCount: 1,
+    dataStockCount: 1,
+    latestDate: '2026-05-20',
+    return5d: null,
+    return20d: null,
+    return60d: null,
+    advancersPct: null,
+    turnover5dAvg: null,
+    turnover20dAvg: null,
+    turnoverRatio: null,
+    volumeRatio: null,
+    momentumScore: 0,
+    flowScore: 0,
+    status: '横ばい',
+    statusTone: 'neutral' as const,
+  }
+
+  it('sorts numeric columns with nulls last', () => {
+    const rows = sortThemeSummaryRows([
+      { ...baseRow, groupId: 'a', groupName: 'A', return20d: null },
+      { ...baseRow, groupId: 'b', groupName: 'B', return20d: 0.08 },
+      { ...baseRow, groupId: 'c', groupName: 'C', return20d: -0.02 },
+    ], 'return20d', 'desc')
+
+    expect(rows.map(row => row.groupId)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('sorts text columns ascending', () => {
+    const rows = sortThemeSummaryRows([
+      { ...baseRow, groupId: 'b', groupName: '防衛' },
+      { ...baseRow, groupId: 'a', groupName: 'AI' },
+    ], 'groupName', 'asc')
+
+    expect(rows.map(row => row.groupName)).toEqual(['AI', '防衛'])
   })
 })

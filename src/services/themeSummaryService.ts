@@ -4,6 +4,20 @@ import type { Db } from '../db/client'
 export type ThemeSummaryScope = 'themes' | 'sector17'
 
 export type ThemeSummaryStatusTone = 'strong' | 'flow' | 'caution' | 'weak' | 'neutral'
+export type ThemeSummarySortKey =
+  | 'groupName'
+  | 'stockCount'
+  | 'return5d'
+  | 'return20d'
+  | 'return60d'
+  | 'advancersPct'
+  | 'turnover5dAvg'
+  | 'turnoverRatio'
+  | 'volumeRatio'
+  | 'momentumScore'
+  | 'flowScore'
+  | 'status'
+export type ThemeSummarySortDirection = 'asc' | 'desc'
 
 export interface ThemeSummaryRow {
   groupType: ThemeSummaryScope
@@ -28,6 +42,8 @@ export interface ThemeSummaryRow {
 
 export interface ThemeSummaryOptions {
   scope?: ThemeSummaryScope
+  sort?: ThemeSummarySortKey
+  direction?: ThemeSummarySortDirection
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -38,6 +54,64 @@ function toNullableNumber(value: unknown): number | null {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
+}
+
+function compareNullableNumber(a: number | null, b: number | null, direction: ThemeSummarySortDirection): number {
+  if (a == null && b == null) return 0
+  if (a == null) return 1
+  if (b == null) return -1
+  return direction === 'asc' ? a - b : b - a
+}
+
+function compareText(a: string, b: string, direction: ThemeSummarySortDirection): number {
+  const compared = a.localeCompare(b, 'ja')
+  return direction === 'asc' ? compared : -compared
+}
+
+function compareSummaryRows(
+  a: ThemeSummaryRow,
+  b: ThemeSummaryRow,
+  sort: ThemeSummarySortKey,
+  direction: ThemeSummarySortDirection,
+): number {
+  switch (sort) {
+    case 'groupName':
+      return compareText(a.groupName, b.groupName, direction)
+    case 'stockCount':
+      return compareNullableNumber(a.stockCount, b.stockCount, direction)
+    case 'return5d':
+      return compareNullableNumber(a.return5d, b.return5d, direction)
+    case 'return20d':
+      return compareNullableNumber(a.return20d, b.return20d, direction)
+    case 'return60d':
+      return compareNullableNumber(a.return60d, b.return60d, direction)
+    case 'advancersPct':
+      return compareNullableNumber(a.advancersPct, b.advancersPct, direction)
+    case 'turnover5dAvg':
+      return compareNullableNumber(a.turnover5dAvg, b.turnover5dAvg, direction)
+    case 'turnoverRatio':
+      return compareNullableNumber(a.turnoverRatio, b.turnoverRatio, direction)
+    case 'volumeRatio':
+      return compareNullableNumber(a.volumeRatio, b.volumeRatio, direction)
+    case 'momentumScore':
+      return compareNullableNumber(a.momentumScore, b.momentumScore, direction)
+    case 'flowScore':
+      return compareNullableNumber(a.flowScore, b.flowScore, direction)
+    case 'status':
+      return compareText(a.status, b.status, direction)
+  }
+}
+
+export function sortThemeSummaryRows(
+  rows: ThemeSummaryRow[],
+  sort: ThemeSummarySortKey,
+  direction: ThemeSummarySortDirection,
+): ThemeSummaryRow[] {
+  return [...rows].sort((a, b) => {
+    const primary = compareSummaryRows(a, b, sort, direction)
+    if (primary !== 0) return primary
+    return a.groupName.localeCompare(b.groupName, 'ja')
+  })
 }
 
 export function calcThemeSummaryScores(input: {
@@ -102,6 +176,8 @@ export async function listThemeSummaries(
   options: ThemeSummaryOptions = {},
 ): Promise<ThemeSummaryRow[]> {
   const scope = options.scope ?? 'themes'
+  const sort = options.sort ?? 'turnoverRatio'
+  const direction = options.direction ?? 'desc'
   const groupFilter = scope === 'sector17'
     ? sql`WHERE group_type = 'sector17'`
     : sql`WHERE group_type = 'themes'`
@@ -259,14 +335,9 @@ export async function listThemeSummaries(
     LEFT JOIN liquidity l
       ON l.group_type = mc.group_type
      AND l.group_id = mc.group_id
-    ORDER BY
-      turnover_ratio DESC NULLS LAST,
-      return_20d DESC NULLS LAST,
-      mc.group_name ASC
-    LIMIT 100
   `)
 
-  return (result.rows as Record<string, unknown>[]).map((row) => {
+  const rows: ThemeSummaryRow[] = (result.rows as Record<string, unknown>[]).map((row) => {
     const return5d = toNullableNumber(row.return_5d)
     const return20d = toNullableNumber(row.return_20d)
     const return60d = toNullableNumber(row.return_60d)
@@ -286,8 +357,10 @@ export async function listThemeSummaries(
       turnoverRatio,
     })
 
+    const groupType: ThemeSummaryScope = row.group_type === 'sector17' ? 'sector17' : 'themes'
+
     return {
-      groupType: row.group_type === 'sector17' ? 'sector17' : 'themes',
+      groupType,
       groupId: String(row.group_id ?? ''),
       groupName: String(row.group_name ?? ''),
       stockCount: Number(row.stock_count ?? 0),
@@ -307,4 +380,6 @@ export async function listThemeSummaries(
       statusTone: judgment.tone,
     }
   })
+
+  return sortThemeSummaryRows(rows, sort, direction)
 }

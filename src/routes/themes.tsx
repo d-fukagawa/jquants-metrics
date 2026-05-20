@@ -16,6 +16,8 @@ import {
 import {
   type ThemeSummaryRow,
   type ThemeSummaryScope,
+  type ThemeSummarySortDirection,
+  type ThemeSummarySortKey,
   listThemeSummaries,
 } from '../services/themeSummaryService'
 import analysisExportTemplate from '../templates/analysis-export.md?raw'
@@ -70,6 +72,31 @@ function parseSummaryScope(raw: string | undefined): ThemeSummaryScope {
   return 'themes'
 }
 
+function parseSummarySort(raw: string | undefined): ThemeSummarySortKey {
+  switch (raw) {
+    case 'groupName':
+    case 'stockCount':
+    case 'return5d':
+    case 'return20d':
+    case 'return60d':
+    case 'advancersPct':
+    case 'turnover5dAvg':
+    case 'turnoverRatio':
+    case 'volumeRatio':
+    case 'momentumScore':
+    case 'flowScore':
+    case 'status':
+      return raw
+    default:
+      return 'turnoverRatio'
+  }
+}
+
+function parseSummaryDirection(raw: string | undefined): ThemeSummarySortDirection {
+  if (raw === 'asc') return 'asc'
+  return 'desc'
+}
+
 function granularityLabel(g: ThemeGranularity): string {
   if (g === 'w') return '週足'
   if (g === 'm') return '月足'
@@ -105,8 +132,13 @@ function pctClass(value: number | null): string {
   return value > 0 ? 'up' : 'down'
 }
 
-function summaryScopeUrl(scope: ThemeSummaryScope): string {
-  return `/themes/summary?scope=${scope}`
+function defaultSummaryDirection(sort: ThemeSummarySortKey): ThemeSummarySortDirection {
+  if (sort === 'groupName' || sort === 'status') return 'asc'
+  return 'desc'
+}
+
+function summaryUrl(scope: ThemeSummaryScope, sort: ThemeSummarySortKey, direction: ThemeSummarySortDirection): string {
+  return `/themes/summary?${new URLSearchParams({ scope, sort, dir: direction }).toString()}`
 }
 
 function normalizeNote(labelRaw: unknown, textRaw: unknown): ThemeNote | null {
@@ -317,9 +349,26 @@ themesRoute.get('/', async (c) => {
 
 themesRoute.get('/summary', async (c) => {
   const scope = parseSummaryScope(c.req.query('scope'))
+  const sort = parseSummarySort(c.req.query('sort'))
+  const direction = parseSummaryDirection(c.req.query('dir'))
   const db = createDb(c.env.DATABASE_URL)
-  const rows = await listThemeSummaries(db, { scope })
+  const rows = await listThemeSummaries(db, { scope, sort, direction })
   const latestDate = rows.find(row => row.latestDate)?.latestDate ?? null
+
+  function sortHeader(label: string, key: ThemeSummarySortKey, align: 'left' | 'right' = 'left') {
+    const active = sort === key
+    const nextDirection = active
+      ? (direction === 'asc' ? 'desc' : 'asc')
+      : defaultSummaryDirection(key)
+    return (
+      <th class={align === 'right' ? 'r' : ''}>
+        <a class={`theme-summary-sort-link${active ? ' active' : ''}`} href={summaryUrl(scope, key, nextDirection)}>
+          <span>{label}</span>
+          {active && <span class="theme-summary-sort-mark">{direction === 'asc' ? '↑' : '↓'}</span>}
+        </a>
+      </th>
+    )
+  }
 
   function groupCell(row: ThemeSummaryRow) {
     if (row.groupType === 'themes') {
@@ -357,8 +406,8 @@ themesRoute.get('/summary', async (c) => {
       <section class="card panel">
         <div class="panel-header">
           <div class="theme-summary-tabs">
-            <a class={`btn-sm${scope === 'themes' ? ' active' : ''}`} href={summaryScopeUrl('themes')}>登録テーマ</a>
-            <a class={`btn-sm${scope === 'sector17' ? ' active' : ''}`} href={summaryScopeUrl('sector17')}>業種17分類</a>
+            <a class={`btn-sm${scope === 'themes' ? ' active' : ''}`} href={summaryUrl('themes', sort, direction)}>登録テーマ</a>
+            <a class={`btn-sm${scope === 'sector17' ? ' active' : ''}`} href={summaryUrl('sector17', sort, direction)}>業種17分類</a>
           </div>
           <span class="badge">{rows.length}件</span>
         </div>
@@ -366,18 +415,18 @@ themesRoute.get('/summary', async (c) => {
           <table class="fav-table theme-summary-table">
             <thead>
               <tr>
-                <th>テーマ</th>
-                <th class="r">銘柄</th>
-                <th class="r">5日</th>
-                <th class="r">20日</th>
-                <th class="r">60日</th>
-                <th class="r">上昇比率</th>
-                <th class="r">売買代金/日</th>
-                <th class="r">売買代金倍率</th>
-                <th class="r">出来高倍率</th>
-                <th class="r">勢い</th>
-                <th class="r">資金</th>
-                <th>判定</th>
+                {sortHeader('テーマ', 'groupName')}
+                {sortHeader('銘柄', 'stockCount', 'right')}
+                {sortHeader('5日', 'return5d', 'right')}
+                {sortHeader('20日', 'return20d', 'right')}
+                {sortHeader('60日', 'return60d', 'right')}
+                {sortHeader('上昇比率', 'advancersPct', 'right')}
+                {sortHeader('売買代金/日', 'turnover5dAvg', 'right')}
+                {sortHeader('売買代金倍率', 'turnoverRatio', 'right')}
+                {sortHeader('出来高倍率', 'volumeRatio', 'right')}
+                {sortHeader('勢い', 'momentumScore', 'right')}
+                {sortHeader('資金', 'flowScore', 'right')}
+                {sortHeader('判定', 'status')}
                 {scope === 'themes' && <th class="r">操作</th>}
               </tr>
             </thead>
