@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { themesRoute } from './themes'
 import * as themeService from '../services/themeService'
+import * as themeSummaryService from '../services/themeSummaryService'
 
 vi.mock('../services/themeService', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../services/themeService')>()
@@ -16,6 +17,9 @@ vi.mock('../services/themeService', async (importOriginal) => {
     listThemeCandidates: vi.fn(),
   }
 })
+vi.mock('../services/themeSummaryService', () => ({
+  listThemeSummaries: vi.fn(),
+}))
 vi.mock('../db/client', () => ({ createDb: vi.fn().mockReturnValue({}) }))
 
 const ENV = {
@@ -65,6 +69,41 @@ describe('themesRoute', () => {
     expect(res.status).toBe(200)
     const json = (await res.json()) as { rows: Array<{ code4: string }> }
     expect(json.rows[0].code4).toBe('7203')
+  })
+
+  it('GET /summary renders theme summary table', async () => {
+    vi.mocked(themeSummaryService.listThemeSummaries).mockResolvedValue([
+      {
+        groupType: 'themes',
+        groupId: 'theme-1',
+        groupName: '半導体',
+        stockCount: 3,
+        dataStockCount: 3,
+        latestDate: '2026-05-20',
+        return5d: 0.03,
+        return20d: 0.08,
+        return60d: 0.15,
+        advancersPct: 66.7,
+        turnover5dAvg: 20_000_000_000,
+        turnover20dAvg: 10_000_000_000,
+        turnoverRatio: 2,
+        volumeRatio: 1.4,
+        momentumScore: 75,
+        flowScore: 70,
+        status: '勢いあり・資金流入',
+        statusTone: 'strong',
+      },
+    ])
+
+    const res = await themesRoute.request('/summary', { method: 'GET' }, ENV)
+    const html = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(themeSummaryService.listThemeSummaries).toHaveBeenCalledWith({}, { scope: 'themes' })
+    expect(html).toContain('テーマサマリー')
+    expect(html).toContain('半導体')
+    expect(html).toContain('勢いあり・資金流入')
+    expect(html).toContain('+8.0%')
   })
 
   it('POST / creates and redirects', async () => {

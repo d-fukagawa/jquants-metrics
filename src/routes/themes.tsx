@@ -13,6 +13,11 @@ import {
   updateTheme,
   updateThemeMemo,
 } from '../services/themeService'
+import {
+  type ThemeSummaryRow,
+  type ThemeSummaryScope,
+  listThemeSummaries,
+} from '../services/themeSummaryService'
 import analysisExportTemplate from '../templates/analysis-export.md?raw'
 import analysisPromptTemplate from '../templates/analysis-prompt.md?raw'
 
@@ -60,10 +65,48 @@ function parseAnalysisView(raw: string | undefined): AnalysisViewMode {
   return 'edit'
 }
 
+function parseSummaryScope(raw: string | undefined): ThemeSummaryScope {
+  if (raw === 'sector17') return 'sector17'
+  return 'themes'
+}
+
 function granularityLabel(g: ThemeGranularity): string {
   if (g === 'w') return '週足'
   if (g === 'm') return '月足'
   return '日足'
+}
+
+function fmtPct(value: number | null): string {
+  if (value == null) return '—'
+  const pct = value * 100
+  return `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`
+}
+
+function fmtRatio(value: number | null): string {
+  if (value == null) return '—'
+  return `${value.toFixed(2)}x`
+}
+
+function fmtWholePct(value: number | null): string {
+  if (value == null) return '—'
+  return `${value.toFixed(1)}%`
+}
+
+function fmtTurnover(value: number | null): string {
+  if (value == null) return '—'
+  if (Math.abs(value) >= 1_000_000_000_000) {
+    return `${(value / 1_000_000_000_000).toFixed(1)}兆円`
+  }
+  return `${Math.round(value / 100_000_000).toLocaleString('ja-JP')}億円`
+}
+
+function pctClass(value: number | null): string {
+  if (value == null || value === 0) return ''
+  return value > 0 ? 'up' : 'down'
+}
+
+function summaryScopeUrl(scope: ThemeSummaryScope): string {
+  return `/themes/summary?scope=${scope}`
 }
 
 function normalizeNote(labelRaw: unknown, textRaw: unknown): ThemeNote | null {
@@ -229,7 +272,10 @@ themesRoute.get('/', async (c) => {
           <p class="empty-state" style="text-align:left;padding:0">
             銘柄テーマごとに分析チャートと検討メモを管理します。
           </p>
-          <a href="/themes/new" class="btn btn-primary">新規作成</a>
+          <div class="theme-list-actions">
+            <a href="/themes/summary" class="btn-sm">サマリー</a>
+            <a href="/themes/new" class="btn btn-primary">新規作成</a>
+          </div>
         </div>
       </section>
 
@@ -266,6 +312,122 @@ themesRoute.get('/', async (c) => {
         </table>
       </div>
     </div>,
+  )
+})
+
+themesRoute.get('/summary', async (c) => {
+  const scope = parseSummaryScope(c.req.query('scope'))
+  const db = createDb(c.env.DATABASE_URL)
+  const rows = await listThemeSummaries(db, { scope })
+  const latestDate = rows.find(row => row.latestDate)?.latestDate ?? null
+
+  function groupCell(row: ThemeSummaryRow) {
+    if (row.groupType === 'themes') {
+      return (
+        <div>
+          <a class="name" href={`/themes/${row.groupId}`}>{row.groupName}</a>
+          <div class="code">ユーザー定義テーマ</div>
+        </div>
+      )
+    }
+    return (
+      <div>
+        <span class="name">{row.groupName}</span>
+        <div class="code">sector17: {row.groupId}</div>
+      </div>
+    )
+  }
+
+  return c.render(
+    <div class="theme-summary-wrap">
+      <section class="search-block" style="margin-bottom:20px">
+        <h1 class="search-label">テーマサマリー</h1>
+        <div class="theme-list-header">
+          <p class="empty-state" style="text-align:left;padding:0">
+            騰落率、上昇銘柄比率、売買代金倍率からテーマの勢いと資金集中を確認します。
+            {latestDate ? ` 最新取引日: ${latestDate}` : ''}
+          </p>
+          <div class="theme-list-actions">
+            <a class="btn-sm" href="/themes">テーマ一覧</a>
+            <a class="btn-sm" href="/themes/new">新規作成</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-header">
+          <div class="theme-summary-tabs">
+            <a class={`btn-sm${scope === 'themes' ? ' active' : ''}`} href={summaryScopeUrl('themes')}>登録テーマ</a>
+            <a class={`btn-sm${scope === 'sector17' ? ' active' : ''}`} href={summaryScopeUrl('sector17')}>業種17分類</a>
+          </div>
+          <span class="badge">{rows.length}件</span>
+        </div>
+        <div class="theme-summary-table-scroll">
+          <table class="fav-table theme-summary-table">
+            <thead>
+              <tr>
+                <th>テーマ</th>
+                <th class="r">銘柄</th>
+                <th class="r">5日</th>
+                <th class="r">20日</th>
+                <th class="r">60日</th>
+                <th class="r">上昇比率</th>
+                <th class="r">売買代金/日</th>
+                <th class="r">売買代金倍率</th>
+                <th class="r">出来高倍率</th>
+                <th class="r">勢い</th>
+                <th class="r">資金</th>
+                <th>判定</th>
+                {scope === 'themes' && <th class="r">操作</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colspan={scope === 'themes' ? 13 : 12} class="empty-state">
+                    {scope === 'themes' ? '登録テーマがありません' : '業種データがありません'}
+                  </td>
+                </tr>
+              ) : rows.map(row => (
+                <tr key={`${row.groupType}-${row.groupId}`}>
+                  <td>{groupCell(row)}</td>
+                  <td class="r">
+                    <span>{row.stockCount}</span>
+                    {row.dataStockCount !== row.stockCount && (
+                      <span class="code"> / 指標{row.dataStockCount}</span>
+                    )}
+                  </td>
+                  <td class={`r ${pctClass(row.return5d)}`}>{fmtPct(row.return5d)}</td>
+                  <td class={`r ${pctClass(row.return20d)}`}>{fmtPct(row.return20d)}</td>
+                  <td class={`r ${pctClass(row.return60d)}`}>{fmtPct(row.return60d)}</td>
+                  <td class="r">{fmtWholePct(row.advancersPct)}</td>
+                  <td class="r">{fmtTurnover(row.turnover5dAvg)}</td>
+                  <td class="r">{fmtRatio(row.turnoverRatio)}</td>
+                  <td class="r">{fmtRatio(row.volumeRatio)}</td>
+                  <td class="r">
+                    <span class="theme-summary-score">{row.momentumScore}</span>
+                  </td>
+                  <td class="r">
+                    <span class="theme-summary-score">{row.flowScore}</span>
+                  </td>
+                  <td>
+                    <span class={`theme-summary-status theme-summary-status--${row.statusTone}`}>
+                      {row.status}
+                    </span>
+                  </td>
+                  {scope === 'themes' && (
+                    <td class="r">
+                      <a class="btn-sm" href={`/themes/${row.groupId}`}>分析</a>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>,
+    { wide: true },
   )
 })
 
