@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { themesRoute } from './themes'
 import * as themeService from '../services/themeService'
 import * as themeSummaryService from '../services/themeSummaryService'
+import * as themeDailySummaryService from '../services/themeDailySummaryService'
 
 vi.mock('../services/themeService', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../services/themeService')>()
@@ -19,6 +20,9 @@ vi.mock('../services/themeService', async (importOriginal) => {
 })
 vi.mock('../services/themeSummaryService', () => ({
   listThemeSummaries: vi.fn(),
+}))
+vi.mock('../services/themeDailySummaryService', () => ({
+  listThemeDailySummaries: vi.fn(),
 }))
 vi.mock('../db/client', () => ({ createDb: vi.fn().mockReturnValue({}) }))
 
@@ -108,6 +112,7 @@ describe('themesRoute', () => {
     expect(html).toContain('半導体')
     expect(html).toContain('勢いあり・資金流入')
     expect(html).toContain('+8.0%')
+    expect(html).toContain('/themes/daily')
     expect(html).toContain('/themes/summary?scope=themes&amp;sort=return20d&amp;dir=desc')
     expect(html).toContain('/themes/summary?scope=themes&amp;sort=turnoverRatio&amp;dir=asc')
   })
@@ -122,6 +127,61 @@ describe('themesRoute', () => {
       scope: 'sector17',
       sort: 'return20d',
       direction: 'asc',
+    })
+  })
+
+  it('GET /daily renders daily market summary', async () => {
+    vi.mocked(themeDailySummaryService.listThemeDailySummaries).mockResolvedValue([
+      {
+        date: '2026-05-20',
+        stockCount: 1000,
+        dataStockCount: 980,
+        return1d: 0.021,
+        return5d: 0.035,
+        return20d: 0.06,
+        advancersPct: 72.4,
+        turnover: 4_200_000_000_000,
+        turnoverRatio: 1.6,
+        volumeRatio: 1.3,
+        intradayRange: 0.025,
+        leaderGroupId: '6',
+        leaderGroupName: '電機・精密',
+        leaderReturn1d: 0.034,
+        leaderTurnoverRatio: 1.9,
+        momentumScore: 76,
+        flowScore: 70,
+        volatilityScore: 38,
+        status: '全面高・資金流入',
+        statusTone: 'strong',
+      },
+    ])
+
+    const res = await themesRoute.request('/daily', { method: 'GET' }, ENV)
+    const html = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(themeDailySummaryService.listThemeDailySummaries).toHaveBeenCalledWith({}, {
+      scope: 'sector17',
+      from: undefined,
+      to: undefined,
+    })
+    expect(html).toContain('日次相場サマリー')
+    expect(html).toContain('全面高・資金流入')
+    expect(html).toContain('電機・精密')
+    expect(html).toContain('+2.1%')
+    expect(html).toContain('4.2兆円')
+  })
+
+  it('GET /daily passes filters to service', async () => {
+    vi.mocked(themeDailySummaryService.listThemeDailySummaries).mockResolvedValue([])
+
+    const res = await themesRoute.request('/daily?scope=themes&from=2026-05-01&to=2026-05-20', { method: 'GET' }, ENV)
+
+    expect(res.status).toBe(200)
+    expect(themeDailySummaryService.listThemeDailySummaries).toHaveBeenCalledWith({}, {
+      scope: 'themes',
+      from: '2026-05-01',
+      to: '2026-05-20',
     })
   })
 

@@ -20,6 +20,11 @@ import {
   type ThemeSummarySortKey,
   listThemeSummaries,
 } from '../services/themeSummaryService'
+import {
+  type ThemeDailySummaryRow,
+  type ThemeDailySummaryScope,
+  listThemeDailySummaries,
+} from '../services/themeDailySummaryService'
 import analysisExportTemplate from '../templates/analysis-export.md?raw'
 import analysisPromptTemplate from '../templates/analysis-prompt.md?raw'
 
@@ -97,6 +102,11 @@ function parseSummaryDirection(raw: string | undefined): ThemeSummarySortDirecti
   return 'desc'
 }
 
+function parseDailySummaryScope(raw: string | undefined): ThemeDailySummaryScope {
+  if (raw === 'themes') return 'themes'
+  return 'sector17'
+}
+
 function granularityLabel(g: ThemeGranularity): string {
   if (g === 'w') return '週足'
   if (g === 'm') return '月足'
@@ -139,6 +149,13 @@ function defaultSummaryDirection(sort: ThemeSummarySortKey): ThemeSummarySortDir
 
 function summaryUrl(scope: ThemeSummaryScope, sort: ThemeSummarySortKey, direction: ThemeSummarySortDirection): string {
   return `/themes/summary?${new URLSearchParams({ scope, sort, dir: direction }).toString()}`
+}
+
+function dailySummaryUrl(scope: ThemeDailySummaryScope, from?: string, to?: string): string {
+  const params = new URLSearchParams({ scope })
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  return `/themes/daily?${params.toString()}`
 }
 
 function normalizeNote(labelRaw: unknown, textRaw: unknown): ThemeNote | null {
@@ -306,6 +323,7 @@ themesRoute.get('/', async (c) => {
           </p>
           <div class="theme-list-actions">
             <a href="/themes/summary" class="btn-sm">サマリー</a>
+            <a href="/themes/daily" class="btn-sm">日次サマリー</a>
             <a href="/themes/new" class="btn btn-primary">新規作成</a>
           </div>
         </div>
@@ -398,6 +416,7 @@ themesRoute.get('/summary', async (c) => {
           </p>
           <div class="theme-list-actions">
             <a class="btn-sm" href="/themes">テーマ一覧</a>
+            <a class="btn-sm" href="/themes/daily">日次サマリー</a>
             <a class="btn-sm" href="/themes/new">新規作成</a>
           </div>
         </div>
@@ -469,6 +488,170 @@ themesRoute.get('/summary', async (c) => {
                       <a class="btn-sm" href={`/themes/${row.groupId}`}>分析</a>
                     </td>
                   )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>,
+    { wide: true },
+  )
+})
+
+themesRoute.get('/daily', async (c) => {
+  const scope = parseDailySummaryScope(c.req.query('scope'))
+  const fromRaw = c.req.query('from')
+  const toRaw = c.req.query('to')
+  const from = fromRaw && isDate(fromRaw) ? fromRaw : undefined
+  const to = toRaw && isDate(toRaw) ? toRaw : undefined
+  if (from && to && from > to) {
+    return c.text('Invalid date range', 400)
+  }
+
+  const db = createDb(c.env.DATABASE_URL)
+  const rows = await listThemeDailySummaries(db, { scope, from, to })
+  const latest = rows[0] ?? null
+
+  function leaderCell(row: ThemeDailySummaryRow) {
+    if (!row.leaderGroupName) return '—'
+    return (
+      <div>
+        <span class="name">{row.leaderGroupName}</span>
+        <div class="code">
+          {scope === 'themes' ? 'theme' : 'sector17'}: {row.leaderGroupId}
+          {' / '}
+          {fmtPct(row.leaderReturn1d)}
+          {' / '}
+          {fmtRatio(row.leaderTurnoverRatio)}
+        </div>
+      </div>
+    )
+  }
+
+  return c.render(
+    <div class="theme-summary-wrap">
+      <section class="search-block" style="margin-bottom:20px">
+        <h1 class="search-label">日次相場サマリー</h1>
+        <div class="theme-list-header">
+          <p class="empty-state" style="text-align:left;padding:0">
+            一日単位で騰落率、上昇銘柄比率、売買代金倍率、主導グループを評価し、その日の相場を俯瞰します。
+            {latest ? ` 最新取引日: ${latest.date}` : ''}
+          </p>
+          <div class="theme-list-actions">
+            <a class="btn-sm" href="/themes">テーマ一覧</a>
+            <a class="btn-sm" href="/themes/summary">テーマサマリー</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-header">
+          <div class="theme-summary-tabs">
+            <a class={`btn-sm${scope === 'sector17' ? ' active' : ''}`} href={dailySummaryUrl('sector17', from, to)}>業種17分類</a>
+            <a class={`btn-sm${scope === 'themes' ? ' active' : ''}`} href={dailySummaryUrl('themes', from, to)}>登録テーマ</a>
+          </div>
+          <span class="badge">{rows.length}日</span>
+        </div>
+        <div class="panel-body">
+          <form method="get" action="/themes/daily" class="theme-daily-filter">
+            <input type="hidden" name="scope" value={scope} />
+            <label>
+              <span class="fg-label">FROM</span>
+              <input class="input-sm" type="date" name="from" value={from ?? ''} />
+            </label>
+            <label>
+              <span class="fg-label">TO</span>
+              <input class="input-sm" type="date" name="to" value={to ?? ''} />
+            </label>
+            <button class="btn-sm" type="submit">適用</button>
+            <a class="btn-sm" href={dailySummaryUrl(scope)}>直近60日</a>
+          </form>
+
+          {latest && (
+            <div class="theme-daily-cards">
+              <div class="metric-card">
+                <div class="metric-label">直近日判定</div>
+                <div class="metric-value">
+                  <span class={`theme-summary-status theme-summary-status--${latest.statusTone}`}>{latest.status}</span>
+                </div>
+                <div class="metric-sub">{latest.date}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">1日騰落率</div>
+                <div class={`metric-value ${pctClass(latest.return1d)}`}>{fmtPct(latest.return1d)}</div>
+                <div class="metric-sub">5日 {fmtPct(latest.return5d)} / 20日 {fmtPct(latest.return20d)}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">上昇銘柄比率</div>
+                <div class="metric-value">{fmtWholePct(latest.advancersPct)}</div>
+                <div class="metric-sub">指標銘柄 {latest.dataStockCount.toLocaleString('ja-JP')}件</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">売買代金倍率</div>
+                <div class="metric-value">{fmtRatio(latest.turnoverRatio)}</div>
+                <div class="metric-sub">売買代金 {fmtTurnover(latest.turnover)}</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">主導グループ</div>
+                <div class="metric-value theme-daily-leader">{latest.leaderGroupName ?? '—'}</div>
+                <div class="metric-sub">{fmtPct(latest.leaderReturn1d)} / {fmtRatio(latest.leaderTurnoverRatio)}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section class="card panel">
+        <div class="panel-header">
+          <span class="panel-title">日次一覧</span>
+          <span class="badge">日付降順</span>
+        </div>
+        <div class="theme-summary-table-scroll">
+          <table class="fav-table theme-summary-table theme-daily-table">
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>判定</th>
+                <th class="r">1日</th>
+                <th class="r">5日</th>
+                <th class="r">20日</th>
+                <th class="r">上昇比率</th>
+                <th class="r">売買代金</th>
+                <th class="r">売買代金倍率</th>
+                <th class="r">出来高倍率</th>
+                <th class="r">日中値幅</th>
+                <th>主導グループ</th>
+                <th class="r">勢い</th>
+                <th class="r">資金</th>
+                <th class="r">値幅</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colspan={14} class="empty-state">日次データがありません</td>
+                </tr>
+              ) : rows.map(row => (
+                <tr key={row.date}>
+                  <td>{row.date}</td>
+                  <td>
+                    <span class={`theme-summary-status theme-summary-status--${row.statusTone}`}>
+                      {row.status}
+                    </span>
+                  </td>
+                  <td class={`r ${pctClass(row.return1d)}`}>{fmtPct(row.return1d)}</td>
+                  <td class={`r ${pctClass(row.return5d)}`}>{fmtPct(row.return5d)}</td>
+                  <td class={`r ${pctClass(row.return20d)}`}>{fmtPct(row.return20d)}</td>
+                  <td class="r">{fmtWholePct(row.advancersPct)}</td>
+                  <td class="r">{fmtTurnover(row.turnover)}</td>
+                  <td class="r">{fmtRatio(row.turnoverRatio)}</td>
+                  <td class="r">{fmtRatio(row.volumeRatio)}</td>
+                  <td class="r">{fmtPct(row.intradayRange)}</td>
+                  <td>{leaderCell(row)}</td>
+                  <td class="r"><span class="theme-summary-score">{row.momentumScore}</span></td>
+                  <td class="r"><span class="theme-summary-score">{row.flowScore}</span></td>
+                  <td class="r"><span class="theme-summary-score">{row.volatilityScore}</span></td>
                 </tr>
               ))}
             </tbody>

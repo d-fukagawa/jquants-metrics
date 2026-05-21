@@ -548,6 +548,29 @@ tbody tr:hover { background: var(--muted); }
 [data-theme="dark"] .theme-summary-status--caution { background: #431407; color: #fed7aa; }
 [data-theme="dark"] .theme-summary-status--weak { background: #450a0a; color: #fecaca; }
 
+.theme-daily-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.theme-daily-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.theme-daily-leader {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-daily-table {
+  min-width: 1380px;
+}
+
 .theme-error-banner {
   margin-bottom: 14px;
   padding: 10px 12px;
