@@ -6,6 +6,13 @@ import { parseCode4, toCode4, toCode5 } from '../utils/stockCode'
 const MAX_THEME_NAME_LEN = 100
 const MAX_THEME_MEMO_LEN = 10_000
 const MAX_THEME_STOCKS = 6
+export const THEME_SOURCE_USER = 'user'
+export const THEME_SOURCE_IMPORTED = 'imported'
+export const THEME_SOURCE_MIXED = 'mixed'
+export const THEME_RELEVANCE_VALUES = ['core', 'related', 'peripheral'] as const
+
+export type ThemeSourceType = typeof THEME_SOURCE_USER | typeof THEME_SOURCE_IMPORTED | typeof THEME_SOURCE_MIXED
+export type ThemeStockRelevance = typeof THEME_RELEVANCE_VALUES[number]
 
 export type ThemeGranularity = 'd' | 'w' | 'm'
 
@@ -19,6 +26,9 @@ export type Theme = {
   id: string
   name: string
   memo: string
+  externalKey?: string | null
+  sourceType?: string
+  importedAt?: Date | null
   createdAt: Date
   updatedAt: Date
 }
@@ -30,6 +40,10 @@ export type ThemeStock = {
   sortOrder: number
   coName: string | null
   mktNm: string | null
+  relevance?: ThemeStockRelevance | null
+  rationale?: string
+  sourceUrl?: string
+  sourceType?: string
 }
 
 export type ThemeListRow = {
@@ -74,6 +88,10 @@ function normalizeCodeTo5(raw: string): string | null {
   }
   const code4 = parseCode4(value)
   return code4 ? toCode5(code4) : null
+}
+
+export function normalizeThemeCodeTo5(raw: string): string | null {
+  return normalizeCodeTo5(raw)
 }
 
 export function normalizeThemeInput(input: ThemeInput): NormalizedThemeInput {
@@ -150,6 +168,10 @@ export async function listThemeStocks(db: Db, themeId: string): Promise<ThemeSto
       themeId: themeStocks.themeId,
       code: themeStocks.code,
       sortOrder: themeStocks.sortOrder,
+      relevance: themeStocks.relevance,
+      rationale: themeStocks.rationale,
+      sourceUrl: themeStocks.sourceUrl,
+      sourceType: themeStocks.sourceType,
       coName: stockMaster.coName,
       mktNm: stockMaster.mktNm,
     })
@@ -165,6 +187,10 @@ export async function listThemeStocks(db: Db, themeId: string): Promise<ThemeSto
     sortOrder: row.sortOrder,
     coName: row.coName ?? null,
     mktNm: row.mktNm ?? null,
+    relevance: row.relevance as ThemeStockRelevance | null,
+    rationale: row.rationale,
+    sourceUrl: row.sourceUrl,
+    sourceType: row.sourceType,
   }))
 }
 
@@ -218,6 +244,7 @@ export async function updateTheme(db: Db, themeId: string, input: ThemeInput): P
     .set({
       name: normalized.name,
       memo: normalized.memo,
+      sourceType: THEME_SOURCE_USER,
       updatedAt: now,
     })
     .where(eq(themes.id, themeId))
@@ -231,6 +258,8 @@ export async function updateTheme(db: Db, themeId: string, input: ThemeInput): P
         themeId,
         code,
         sortOrder: i,
+        sourceType: THEME_SOURCE_USER,
+        updatedAt: now,
         createdAt: now,
       })),
     )
@@ -238,6 +267,8 @@ export async function updateTheme(db: Db, themeId: string, input: ThemeInput): P
       target: [themeStocks.themeId, themeStocks.code],
       set: {
         sortOrder: sql`excluded.sort_order`,
+        sourceType: sql`excluded.source_type`,
+        updatedAt: sql`excluded.updated_at`,
       },
     })
 

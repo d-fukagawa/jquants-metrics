@@ -7,7 +7,7 @@
 
 - **実行方法**: `npx tsx scripts/<name>.ts` (Cron は [.github/workflows/*.yml](../../.github/workflows/) からこの形で起動)
 - **必須 env が無いとき**: `process.exit(1)` (CI の判定基準)
-- **stdout 形式**: 各スクリプトは固定プレフィックス (`[price-sync]`, `[edinet-watch-sync]`, `[fin-backfill]`, `[backfill]`) で行を出す。grep / log scraping (`429` 検出など) が依存している。
+- **stdout 形式**: 各スクリプトは固定プレフィックス (`[price-sync]`, `[edinet-watch-sync]`, `[fin-backfill]`, `[backfill]`, `[theme-import]`) で行を出す。grep / log scraping (`429` 検出など) が依存している。
 - **exit code**: `0` = 成功、非 0 = 失敗。GitHub Actions の `PIPESTATUS` キャプチャがこれに依存。
 
 ## scripts/daily-prices-sync.ts
@@ -51,6 +51,16 @@
 | 引数 | なし |
 | stdout プレフィックス | `[backfill]` |
 | 呼び出し元 workflow | [backfill-prices.yml](../../.github/workflows/backfill-prices.yml) (土曜 11:00 UTC) |
+
+## scripts/import-stock-themes.ts
+
+| | |
+|---|---|
+| 必須 env | `DATABASE_URL` |
+| 任意 env | なし |
+| 引数 | 取り込みJSONファイルパス（必須） |
+| stdout プレフィックス | `[theme-import]` |
+| 呼び出し元 workflow | なし（手動メンテJSONの手動取り込み） |
 
 ## scripts/notify-discord.mjs
 

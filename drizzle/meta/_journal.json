@@ -50,6 +50,13 @@
       "when": 1773411187027,
       "tag": "0006_tiresome_punisher",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781524743065,
+      "tag": "0007_famous_sasquatch",
+      "breakpoints": true
     }
   ]
 }

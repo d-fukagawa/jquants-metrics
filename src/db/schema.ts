@@ -236,10 +236,14 @@ export const themes = pgTable('themes', {
   id:        text('id').primaryKey(),
   name:      text('name').notNull(),
   memo:      text('memo').notNull().default(''),
+  externalKey: text('external_key').unique(),
+  sourceType: text('source_type').notNull().default('user'),
+  importedAt: timestamp('imported_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
 }, (t) => [
   index('idx_themes_updated_at').on(t.updatedAt),
+  index('idx_themes_external_key').on(t.externalKey),
 ])
 
 // テーマ内の銘柄（順序あり）
@@ -247,9 +251,15 @@ export const themeStocks = pgTable('theme_stocks', {
   themeId:   text('theme_id').notNull(),
   code:      varchar('code', { length: 5 }).notNull(),
   sortOrder: integer('sort_order').notNull(),
+  relevance: text('relevance'),
+  rationale: text('rationale').notNull().default(''),
+  sourceUrl: text('source_url').notNull().default(''),
+  sourceType: text('source_type').notNull().default('user'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }),
 }, (t) => [
   primaryKey({ columns: [t.themeId, t.code] }),
   index('idx_theme_stocks_theme_sort').on(t.themeId, t.sortOrder),
   index('idx_theme_stocks_code').on(t.code),
+  index('idx_theme_stocks_import_source').on(t.themeId, t.sourceType),
 ])

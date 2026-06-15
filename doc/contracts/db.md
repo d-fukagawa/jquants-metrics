@@ -33,8 +33,8 @@ DB は Neon PostgreSQL。`drizzle-kit migrate` で適用される。**migration 
 |---|---|---|
 | `stock_memo_meta` | `code` | ウォッチフラグ |
 | `stock_memos` | `id` | 自由メモ |
-| `themes` | `id` | テーマ定義 |
-| `theme_stocks` | (`themeId`, `code`) | テーマ所属銘柄 |
+| `themes` | `id` | テーマ定義。外部JSON由来は `externalKey`, `sourceType`, `importedAt` を持つ |
+| `theme_stocks` | (`themeId`, `code`) | テーマ所属銘柄。外部JSON由来は `relevance`, `rationale`, `sourceUrl`, `sourceType`, `updatedAt` を持つ |
 
 ## 内部ログ (自由)
 
