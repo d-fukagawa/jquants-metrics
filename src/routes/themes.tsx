@@ -25,6 +25,7 @@ import {
   type ThemeDailySummaryScope,
   listThemeDailySummaries,
 } from '../services/themeDailySummaryService'
+import { ThemeImportError, importStockThemes } from '../services/themeImportService'
 import analysisExportTemplate from '../templates/analysis-export.md?raw'
 import analysisPromptTemplate from '../templates/analysis-prompt.md?raw'
 
@@ -309,6 +310,108 @@ function editorPage(
   )
 }
 
+function importPage({
+  rawJson = '',
+  error,
+  result,
+}: {
+  rawJson?: string
+  error?: string
+  result?: { themes: number; links: number; skippedUserLinks: number }
+} = {}) {
+  return (
+    <div class="theme-form-wrap">
+      <section class="search-block" style="margin-bottom:20px">
+        <h1 class="search-label">テーマJSON取り込み</h1>
+        <div class="theme-list-header">
+          <p class="empty-state" style="text-align:left;padding:0">
+            手動メンテJSONからテーマ定義と銘柄紐付けを取り込みます。1テーマ最大6銘柄、銘柄コードは4桁または5桁に対応します。
+          </p>
+          <div class="theme-list-actions">
+            <a class="btn-sm" href="/themes">テーマ一覧</a>
+          </div>
+        </div>
+      </section>
+
+      {error && (
+        <div class="theme-error-banner">{error}</div>
+      )}
+
+      {result && (
+        <section class="card panel" style="margin-bottom:20px">
+          <div class="panel-header">
+            <span class="panel-title">取り込み結果</span>
+          </div>
+          <div class="panel-body">
+            <p class="empty-state" style="text-align:left;padding:0">
+              テーマ {result.themes} 件、銘柄紐付け {result.links} 件を取り込みました。
+              {result.skippedUserLinks > 0 ? ` ユーザー編集済みの紐付け ${result.skippedUserLinks} 件は上書きしていません。` : ''}
+            </p>
+          </div>
+        </section>
+      )}
+
+      <form method="post" action="/themes/import" enctype="multipart/form-data" class="theme-form-grid">
+        <div class="card panel">
+          <div class="panel-header">
+            <span class="panel-title">JSON入力</span>
+          </div>
+          <div class="panel-body">
+            <div>
+              <label class="fg-label" for="theme-import-file">JSONファイル</label>
+              <input id="theme-import-file" class="input" type="file" name="file" accept="application/json,.json" />
+            </div>
+            <div>
+              <label class="fg-label" for="theme-import-json">JSON貼り付け</label>
+              <textarea
+                id="theme-import-json"
+                class="input"
+                name="json"
+                rows={18}
+                placeholder='{"schema_version":1,"as_of":"2026-06-15","themes_master":[],"stock_themes":[]}'
+              >{rawJson}</textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="panel-header">
+            <span class="panel-title">期待スキーマ</span>
+          </div>
+          <div class="panel-body">
+            <pre style="white-space:pre-wrap;font-size:12px;margin:0">{`{
+  "schema_version": 1,
+  "as_of": "2026-06-15",
+  "themes_master": [
+    {
+      "theme_id": "ai-semiconductor",
+      "name": "AI半導体",
+      "description": "AI向け半導体・製造装置・材料",
+      "category": "technology"
+    }
+  ],
+  "stock_themes": [
+    {
+      "theme_id": "ai-semiconductor",
+      "code": "80350",
+      "relevance": "core",
+      "rationale": "根拠テキスト",
+      "source_url": "https://example.com/source"
+    }
+  ]
+}`}</pre>
+          </div>
+        </div>
+
+        <div class="theme-form-actions">
+          <a class="btn-sm" href="/themes">一覧へ戻る</a>
+          <button class="btn btn-primary" type="submit">取り込む</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 themesRoute.get('/', async (c) => {
   const db = createDb(c.env.DATABASE_URL)
   const rows = await listThemes(db)
@@ -324,6 +427,7 @@ themesRoute.get('/', async (c) => {
           <div class="theme-list-actions">
             <a href="/themes/summary" class="btn-sm">サマリー</a>
             <a href="/themes/daily" class="btn-sm">日次サマリー</a>
+            <a href="/themes/import" class="btn-sm">JSON取り込み</a>
             <a href="/themes/new" class="btn btn-primary">新規作成</a>
           </div>
         </div>
@@ -669,6 +773,55 @@ themesRoute.get('/new', async (c) => {
     memo: '',
     stocks: [],
   }))
+})
+
+themesRoute.get('/import', async (c) => {
+  return c.render(importPage())
+})
+
+async function readImportJsonFromForm(form: FormData): Promise<string> {
+  const fileValue = form.get('file')
+  if (
+    fileValue &&
+    typeof fileValue === 'object' &&
+    'size' in fileValue &&
+    'text' in fileValue &&
+    typeof fileValue.text === 'function' &&
+    Number(fileValue.size) > 0
+  ) {
+    return fileValue.text()
+  }
+  return String(form.get('json') ?? '').trim()
+}
+
+themesRoute.post('/import', async (c) => {
+  const form = await c.req.formData()
+  const rawJson = await readImportJsonFromForm(form)
+  if (!rawJson) {
+    c.status(400)
+    return c.render(importPage({ error: 'JSONファイルを選択するか、JSON本文を貼り付けてください。' }))
+  }
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(rawJson)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    c.status(400)
+    return c.render(importPage({ rawJson, error: `JSONの構文が不正です: ${message}` }))
+  }
+
+  const db = createDb(c.env.DATABASE_URL)
+  try {
+    const result = await importStockThemes(db, payload)
+    return c.render(importPage({ rawJson, result }))
+  } catch (error) {
+    if (error instanceof ThemeImportError) {
+      c.status(400)
+      return c.render(importPage({ rawJson, error: error.message }))
+    }
+    throw error
+  }
 })
 
 themesRoute.get('/stock-search', async (c) => {

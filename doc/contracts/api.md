@@ -83,6 +83,8 @@ X-Sync-Secret: <SYNC_SECRET の値>
 | `GET /watchlist` | HTML | ウォッチリスト + メモ |
 | `POST /watchlist/...` | redirect | メモ操作 |
 | `GET /themes` ほか | HTML / redirect | テーマ機能一式 |
+| `GET /themes/import` | HTML | テーマJSON取り込みフォーム |
+| `POST /themes/import` | HTML | テーマJSON取り込み実行 |
 | `GET /themes/daily` | HTML | 日次相場サマリー |
 | `POST /api/sync` | JSON | 上記 §1 |
 

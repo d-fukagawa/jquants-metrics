@@ -3,6 +3,7 @@ import { themesRoute } from './themes'
 import * as themeService from '../services/themeService'
 import * as themeSummaryService from '../services/themeSummaryService'
 import * as themeDailySummaryService from '../services/themeDailySummaryService'
+import * as themeImportService from '../services/themeImportService'
 
 vi.mock('../services/themeService', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../services/themeService')>()
@@ -24,6 +25,13 @@ vi.mock('../services/themeSummaryService', () => ({
 vi.mock('../services/themeDailySummaryService', () => ({
   listThemeDailySummaries: vi.fn(),
 }))
+vi.mock('../services/themeImportService', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../services/themeImportService')>()
+  return {
+    ...mod,
+    importStockThemes: vi.fn(),
+  }
+})
 vi.mock('../db/client', () => ({ createDb: vi.fn().mockReturnValue({}) }))
 
 const ENV = {
@@ -54,6 +62,7 @@ describe('themesRoute', () => {
     expect(res.status).toBe(200)
     expect(html).toContain('テーマ一覧')
     expect(html).toContain('光デバイス')
+    expect(html).toContain('JSON取り込み')
   })
 
   it('GET /new renders create form', async () => {
@@ -62,6 +71,83 @@ describe('themesRoute', () => {
     expect(res.status).toBe(200)
     expect(html).toContain('テーマ新規作成')
     expect(html).toContain('theme-stock-search-input')
+  })
+
+  it('GET /import renders JSON import form', async () => {
+    const res = await themesRoute.request('/import', { method: 'GET' }, ENV)
+    const html = await res.text()
+    expect(res.status).toBe(200)
+    expect(html).toContain('テーマJSON取り込み')
+    expect(html).toContain('theme-import-json')
+    expect(html).toContain('期待スキーマ')
+  })
+
+  it('POST /import imports pasted JSON and renders result', async () => {
+    vi.mocked(themeImportService.importStockThemes).mockResolvedValue({
+      themes: 1,
+      links: 2,
+      skippedUserLinks: 0,
+    })
+    const payload = {
+      schema_version: 1,
+      as_of: '2026-06-15',
+      themes_master: [
+        { theme_id: 'ai-semiconductor', name: 'AI半導体', description: '', category: 'technology' },
+      ],
+      stock_themes: [
+        {
+          theme_id: 'ai-semiconductor',
+          code: '80350',
+          relevance: 'core',
+          rationale: '根拠',
+          source_url: 'https://example.com/source',
+        },
+      ],
+    }
+    const form = new URLSearchParams({ json: JSON.stringify(payload) })
+
+    const res = await themesRoute.request('/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    }, ENV)
+    const html = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(themeImportService.importStockThemes).toHaveBeenCalledWith({}, payload)
+    expect(html).toContain('テーマ 1 件、銘柄紐付け 2 件を取り込みました')
+  })
+
+  it('POST /import returns 400 for invalid JSON', async () => {
+    const form = new URLSearchParams({ json: '{"schema_version":' })
+
+    const res = await themesRoute.request('/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    }, ENV)
+    const html = await res.text()
+
+    expect(res.status).toBe(400)
+    expect(themeImportService.importStockThemes).not.toHaveBeenCalled()
+    expect(html).toContain('JSONの構文が不正です')
+  })
+
+  it('POST /import returns 400 for import validation errors', async () => {
+    vi.mocked(themeImportService.importStockThemes).mockRejectedValue(
+      new themeImportService.ThemeImportError('theme has more than 6 stock links: ai'),
+    )
+    const form = new URLSearchParams({ json: '{"schema_version":1}' })
+
+    const res = await themesRoute.request('/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    }, ENV)
+    const html = await res.text()
+
+    expect(res.status).toBe(400)
+    expect(html).toContain('theme has more than 6 stock links: ai')
   })
 
   it('GET /stock-search returns rows', async () => {
