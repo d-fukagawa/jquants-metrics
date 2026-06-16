@@ -86,6 +86,8 @@ X-Sync-Secret: <SYNC_SECRET の値>
 | `GET /themes/import` | HTML | テーマJSON取り込みフォーム |
 | `POST /themes/import` | HTML | テーマJSON取り込み実行 |
 | `GET /themes/daily` | HTML | 日次相場サマリー |
+| `GET /buy-timing` | HTML | 押し目買いタイミング検証 |
+| `GET /api/buy-timing/backtest` | JSON | 押し目買いバックテスト |
 | `POST /api/sync` | JSON | 上記 §1 |
 
 ### Breaking change の例

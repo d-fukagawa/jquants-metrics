@@ -453,6 +453,63 @@ tbody tr:hover { background: var(--muted); }
 .page-btn:hover:not(.active) { background: var(--muted); }
 .page-btn.active { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
 
+/* ── Buy Timing ── */
+.buy-timing-wrap {
+  grid-template-columns: 260px 1fr;
+}
+
+.buy-timing-header {
+  margin-bottom: 18px;
+}
+
+.buy-timing-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.buy-timing-range {
+  width: 100%;
+  margin-top: 8px;
+  accent-color: var(--primary);
+}
+
+.buy-timing-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.buy-timing-note {
+  text-align: left;
+  padding: 0 0 12px;
+}
+
+.buy-timing-table {
+  min-width: 640px;
+}
+
+.buy-timing-chart-placeholder {
+  margin-top: 14px;
+}
+
+.buy-timing-hidden {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .buy-timing-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .buy-timing-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Themes ── */
 .theme-list-header {
   display: flex;

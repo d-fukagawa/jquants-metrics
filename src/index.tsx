@@ -11,6 +11,7 @@ import { timelineRoute } from './routes/timeline'
 import { alphaRoute } from './routes/alpha'
 import { watchlistRoute } from './routes/watchlist'
 import { themesRoute } from './routes/themes'
+import { buyTimingApiRoute, buyTimingRoute } from './routes/buyTiming'
 import { createDb }    from './db/client'
 import { syncStockMaster, syncDailyPricesAll } from './services/syncService'
 import { enumerateDates } from './utils/date'
@@ -29,6 +30,8 @@ app.route('/timeline', timelineRoute)
 app.route('/alpha', alphaRoute)
 app.route('/watchlist', watchlistRoute)
 app.route('/themes', themesRoute)
+app.route('/buy-timing', buyTimingRoute)
+app.route('/api/buy-timing', buyTimingApiRoute)
 
 export default {
   fetch: app.fetch.bind(app),
