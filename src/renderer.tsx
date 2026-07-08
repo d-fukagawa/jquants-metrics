@@ -22,6 +22,7 @@ export const renderer = jsxRenderer(({ children, wide }: { children?: any; wide?
             <nav class="nav">
               <a href="/" class="nav-link">ホーム</a>
               <a href="/screen" class="nav-link">スクリーニング</a>
+              <a href="/rankings/daily" class="nav-link">ランキング</a>
               <a href="/buy-timing" class="nav-link">買いタイミング</a>
               <a href="/themes" class="nav-link">テーマ</a>
               <a href="/watchlist" class="nav-link">ウォッチ</a>

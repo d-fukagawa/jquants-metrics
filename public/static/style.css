@@ -199,6 +199,22 @@ a { color: inherit; text-decoration: none; }
 .up   { color: var(--up); }
 .down { color: var(--down); }
 
+.daily-ranking-filter {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.daily-ranking-filter label { display: grid; gap: 5px; }
+.daily-ranking-note { margin: 12px 0 0; color: var(--muted-fg); font-size: 13px; }
+.daily-ranking-panel { margin-top: 20px; }
+.daily-ranking-table-scroll { overflow-x: auto; }
+.daily-ranking-table { min-width: 980px; }
+.daily-ranking-table td { white-space: nowrap; }
+.daily-ranking-table td:nth-child(3) { white-space: normal; min-width: 180px; }
+.daily-ranking-rank { font-weight: 700; }
+.daily-ranking-turnover { font-variant-numeric: tabular-nums; font-weight: 600; }
+
 /* ── Stock Page ── */
 .page-header { margin-bottom: 32px; }
 .page-title  { font-size: 24px; font-weight: 700; letter-spacing: -0.03em; }
