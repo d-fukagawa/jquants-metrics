@@ -7,6 +7,7 @@ import {
   type DailyRankingLimit,
   type DailyRankingMarket,
 } from '../services/dailyRankingService'
+import { serializeDailyRankingCsv } from '../services/dailyRankingCsvService'
 import type { Bindings } from '../types'
 
 export const dailyRankingsRoute = new Hono<{ Bindings: Bindings }>()
@@ -24,6 +25,29 @@ function parseMarket(value: string | undefined): DailyRankingMarket | undefined 
 function parseLimit(value: string | undefined): DailyRankingLimit {
   const limit = Number(value)
   return DAILY_RANKING_LIMITS.find(candidate => candidate === limit) ?? 50
+}
+
+type ParsedRankingFilters =
+  | { ok: true; date: string | undefined; market: DailyRankingMarket | undefined; limit: DailyRankingLimit }
+  | { ok: false; message: string }
+
+function parseRankingFilters(
+  dateValue: string | undefined,
+  marketValue: string | undefined,
+  limitValue: string | undefined,
+): ParsedRankingFilters {
+  const date = dateValue?.trim() || undefined
+  if (date && !isIsoDate(date)) {
+    return { ok: false, message: 'Invalid date' }
+  }
+
+  const marketRaw = marketValue?.trim() || undefined
+  const market = parseMarket(marketRaw)
+  if (marketRaw && !market) {
+    return { ok: false, message: 'Invalid market' }
+  }
+
+  return { ok: true, date, market, limit: parseLimit(limitValue) }
 }
 
 function fmtPrice(value: number | null): string {
@@ -47,23 +71,40 @@ function fmtTurnover(value: number): string {
   return `${Math.round(value / 1_000_000).toLocaleString('ja-JP')} 百万円`
 }
 
+function fmtRatio(value: number | null): string {
+  return value == null ? '—' : `${value.toFixed(2)}倍`
+}
+
+function fmtMarketCap(value: number | null): string {
+  if (value == null) return '—'
+  return `${Math.round(value / 100_000_000).toLocaleString('ja-JP')} 億円`
+}
+
 function changeClass(value: number | null): string {
   if (value == null || value === 0) return ''
   return value > 0 ? 'up' : 'down'
 }
 
-dailyRankingsRoute.get('/', async (c) => {
-  const dateRaw = c.req.query('date')?.trim()
-  if (dateRaw && !isIsoDate(dateRaw)) {
-    return c.text('Invalid date', 400)
-  }
+function dailyRankingCsvUrl(
+  date: string | null,
+  market: DailyRankingMarket | undefined,
+  limit: DailyRankingLimit,
+): string {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (date) params.set('date', date)
+  if (market) params.set('market', market)
+  return `/rankings/daily/csv?${params.toString()}`
+}
 
-  const marketRaw = c.req.query('market')?.trim()
-  const market = parseMarket(marketRaw)
-  if (marketRaw && !market) {
-    return c.text('Invalid market', 400)
-  }
-  const limit = parseLimit(c.req.query('limit'))
+dailyRankingsRoute.get('/', async (c) => {
+  const filters = parseRankingFilters(
+    c.req.query('date'),
+    c.req.query('market'),
+    c.req.query('limit'),
+  )
+  if (!filters.ok) return c.text(filters.message, 400)
+
+  const { date: dateRaw, market, limit } = filters
   const db = createDb(c.env.DATABASE_URL)
   const result = await listDailyTurnoverRankings(db, {
     date: dateRaw,
@@ -111,10 +152,15 @@ dailyRankingsRoute.get('/', async (c) => {
             </label>
             <button class="btn-sm" type="submit">適用</button>
             <a class="btn-sm" href="/rankings/daily">最新日</a>
+            <a class="btn-sm" href={dailyRankingCsvUrl(result.date, market, limit)}>CSVダウンロード</a>
           </form>
           {result.previousDate && (
             <p class="daily-ranking-note">騰落率の比較対象: {result.previousDate}（調整後終値）</p>
           )}
+          <p class="daily-ranking-note">
+            20日平均比は対象日を除く直前20営業日の売買代金平均との比較です。
+            時価総額は対象日までに公表された通期発行済株式数から算出します。
+          </p>
         </div>
       </section>
 
@@ -131,17 +177,23 @@ dailyRankingsRoute.get('/', async (c) => {
                 <th>コード</th>
                 <th>銘柄名</th>
                 <th>市場</th>
+                <th class="r">市場内順位</th>
                 <th>業種17分類</th>
+                <th>業種33分類</th>
+                <th class="r">業種内順位</th>
+                <th>規模区分</th>
                 <th class="r">調整後終値</th>
                 <th class="r">前日比</th>
                 <th class="r">騰落率</th>
                 <th class="r">売買代金</th>
+                <th class="r">20日平均比</th>
+                <th class="r">時価総額</th>
               </tr>
             </thead>
             <tbody>
               {result.rows.length === 0 ? (
                 <tr>
-                  <td colspan={9} class="empty-state">
+                  <td colspan={15} class="empty-state">
                     {result.date ? '指定日のランキングデータがありません' : '日足データがありません'}
                   </td>
                 </tr>
@@ -151,11 +203,17 @@ dailyRankingsRoute.get('/', async (c) => {
                   <td><a href={`/stock/${row.code4}`}>{row.code4}</a></td>
                   <td><a href={`/stock/${row.code4}`}>{row.coName}</a></td>
                   <td>{row.market}</td>
+                  <td class="r">{row.marketRank}</td>
                   <td>{row.sector17Name || '—'}</td>
+                  <td>{row.sector33Name || '—'}</td>
+                  <td class="r">{row.sectorRank}</td>
+                  <td>{row.scaleCategory || '—'}</td>
                   <td class="r">{fmtPrice(row.close)}</td>
                   <td class={`r ${changeClass(row.change)}`}>{fmtChange(row.change)}</td>
                   <td class={`r ${changeClass(row.changePct)}`}>{fmtChangePct(row.changePct)}</td>
                   <td class="r daily-ranking-turnover">{fmtTurnover(row.turnover)}</td>
+                  <td class="r">{fmtRatio(row.turnover20dRatio)}</td>
+                  <td class="r">{fmtMarketCap(row.marketCap)}</td>
                 </tr>
               ))}
             </tbody>
@@ -165,4 +223,35 @@ dailyRankingsRoute.get('/', async (c) => {
     </div>,
     { wide: true },
   )
+})
+
+dailyRankingsRoute.get('/csv', async (c) => {
+  const filters = parseRankingFilters(
+    c.req.query('date'),
+    c.req.query('market'),
+    c.req.query('limit'),
+  )
+  if (!filters.ok) return c.text(filters.message, 400)
+
+  const db = createDb(c.env.DATABASE_URL)
+  const result = await listDailyTurnoverRankings(db, {
+    date: filters.date,
+    market: filters.market,
+    limit: filters.limit,
+  })
+  const datePart = result.date ?? filters.date ?? 'no-data'
+  const marketPart = filters.market === 'プライム'
+    ? 'prime'
+    : filters.market === 'スタンダード'
+      ? 'standard'
+      : filters.market === 'グロース'
+        ? 'growth'
+        : 'all'
+
+  c.header('Content-Type', 'text/csv; charset=utf-8')
+  c.header(
+    'Content-Disposition',
+    `attachment; filename="daily-turnover-ranking_${datePart}_${marketPart}_${filters.limit}.csv"`,
+  )
+  return c.body(serializeDailyRankingCsv(result))
 })

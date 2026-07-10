@@ -78,6 +78,7 @@ X-Sync-Secret: <SYNC_SECRET の値>
 | `GET /stock/:code/verdict` | HTML | バリュエーション判定ビュー |
 | `GET /screen` | HTML | スクリーニング結果 |
 | `GET /rankings/daily` | HTML | 日次売買代金ランキング |
+| `GET /rankings/daily/csv` | CSV | 表示条件に対応する日次売買代金ランキングのダウンロード |
 | `GET /sync-status` | HTML | 同期状況 |
 | `GET /timeline` | HTML | EDINET 開示タイムライン |
 | `GET /alpha` | HTML | サプライズ抽出 |
