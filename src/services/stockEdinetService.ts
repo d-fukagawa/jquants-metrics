@@ -86,10 +86,11 @@ export async function listTimelineEvents(db: Db, filters: TimelineFilters) {
   const whereClause = conds.length > 0 ? sql.join(conds, sql` AND `) : sql`TRUE`
 
   const result = await db.execute(sql`
-    SELECT *
+    SELECT edinet_filings.*, stock_master.co_name
     FROM edinet_filings
+    LEFT JOIN stock_master ON stock_master.code = edinet_filings.code
     WHERE ${whereClause}
-    ORDER BY filing_date DESC, submitted_at DESC NULLS LAST
+    ORDER BY filing_date DESC, submitted_at DESC NULLS LAST, edinet_code, doc_id
     LIMIT ${pageSize}
     OFFSET ${(page - 1) * pageSize}
   `)
@@ -101,6 +102,8 @@ export async function listTimelineEvents(db: Db, filters: TimelineFilters) {
     filingDate: String(r.filing_date ?? ''),
     eventType: String(r.event_type ?? ''),
     title: String(r.title ?? ''),
+    coName: r.co_name != null ? String(r.co_name) : null,
+    sourceUrl: r.source_url != null ? String(r.source_url) : null,
     isAmendment: Boolean(r.is_amendment),
     submittedAt: r.submitted_at != null ? String(r.submitted_at) : null,
     sourceUpdatedAt: r.source_updated_at != null ? String(r.source_updated_at) : null,

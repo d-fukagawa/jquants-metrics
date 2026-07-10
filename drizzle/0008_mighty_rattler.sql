@@ -1,0 +1,1 @@
+ALTER TABLE "edinet_filings" ADD COLUMN "source_url" text;

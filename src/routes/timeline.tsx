@@ -7,6 +7,16 @@ import { parseCode4 } from '../utils/stockCode'
 
 export const timelineRoute = new Hono<{ Bindings: Bindings }>()
 
+function filingSourceUrl(sourceUrl: string | null, docId: string): string | null {
+  for (const candidate of [sourceUrl, docId]) {
+    if (!candidate) continue
+    try {
+      if (new URL(candidate).protocol === 'https:') return candidate
+    } catch {}
+  }
+  return null
+}
+
 timelineRoute.get('/', async (c) => {
   const q = (k: string) => c.req.query(k)
   const eventTypes = c.req.queries('event_type') ?? []
@@ -34,29 +44,57 @@ timelineRoute.get('/', async (c) => {
         </form>
       </section>
 
-      <div class="card">
-        <table class="fav-table">
+      <div class="card timeline-table-scroll">
+        <table class="fav-table timeline-table">
           <thead>
             <tr>
               <th>開示日</th>
-              <th>コード</th>
+              <th>銘柄</th>
               <th>種別</th>
-              <th>タイトル</th>
+              <th>開示内容</th>
               <th>修正</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr><td colspan={5} class="empty-state">イベントがありません</td></tr>
-            ) : rows.map((r: any) => (
-              <tr key={`${r.edinetCode}-${r.docId}`}>
-                <td>{r.filingDate}</td>
-                <td><span class="code">{(r.code ?? '').toString().slice(0, 4)}</span></td>
-                <td>{r.eventType}</td>
-                <td>{r.title}</td>
-                <td>{r.isAmendment ? 'あり' : '—'}</td>
-              </tr>
-            ))}
+            ) : rows.map((r) => {
+              const code4 = r.code?.slice(0, 4) ?? null
+              const sourceUrl = filingSourceUrl(r.sourceUrl, r.docId)
+              return (
+                <tr key={`${r.edinetCode}-${r.docId}`}>
+                  <td>{r.filingDate}</td>
+                  <td>
+                    {code4 ? (
+                      <a href={`/stock/${code4}`} class="timeline-stock-link">
+                        <span class="code">{code4}</span>
+                        <span class="timeline-stock-name">{r.coName ?? '銘柄名未同期'}</span>
+                      </a>
+                    ) : '—'}
+                  </td>
+                  <td>{r.eventType}</td>
+                  <td>
+                    {sourceUrl ? (
+                      <a
+                        href={sourceUrl}
+                        class="timeline-source-link"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <span>{r.title}</span>
+                        <span class="timeline-source-label">原文 ↗</span>
+                      </a>
+                    ) : (
+                      <div>
+                        <div>{r.title}</div>
+                        <span class="timeline-source-missing">原文リンク未取得</span>
+                      </div>
+                    )}
+                  </td>
+                  <td>{r.isAmendment ? 'あり' : '—'}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

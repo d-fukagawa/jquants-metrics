@@ -117,6 +117,7 @@ export const edinetFilings = pgTable('edinet_filings', {
   filingDate:    date('filing_date').notNull(),
   eventType:     text('event_type').notNull(),
   title:         text('title').notNull(),
+  sourceUrl:     text('source_url'),
   isAmendment:   boolean('is_amendment').notNull().default(false),
   submittedAt:   timestamp('submitted_at', { withTimezone: true }),
   sourceUpdatedAt: timestamp('source_updated_at', { withTimezone: true }),

@@ -11,12 +11,23 @@ describe('stockEdinetService', () => {
 
   it('listTimelineEvents returns rows from SQL execution', async () => {
     const execute = vi.fn().mockResolvedValue({
-      rows: [{ filing_date: '2026-02-14', event_type: '決算短信', title: 'Q3', code: '72030', edinet_code: 'E00001', doc_id: 'DOC1' }],
+      rows: [{
+        filing_date: '2026-02-14',
+        event_type: '決算短信',
+        title: 'Q3',
+        code: '72030',
+        co_name: 'トヨタ自動車',
+        edinet_code: 'E00001',
+        doc_id: 'DOC1',
+        source_url: 'https://example.com/DOC1.pdf',
+      }],
     })
     const db = { execute } as unknown as Db
     const rows = await listTimelineEvents(db, { code: '7203' })
     expect(rows).toHaveLength(1)
     expect(rows[0].eventType).toBe('決算短信')
+    expect(rows[0].coName).toBe('トヨタ自動車')
+    expect(rows[0].sourceUrl).toBe('https://example.com/DOC1.pdf')
     expect(execute).toHaveBeenCalledTimes(1)
   })
 

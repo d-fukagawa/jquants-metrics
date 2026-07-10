@@ -50,11 +50,16 @@ describe('edinetSyncService', () => {
       filingDate: '2026-02-14',
       eventType: '決算短信',
       title: 'Q3',
+      sourceUrl: 'https://example.com/DOC1.pdf',
       isAmendment: false,
     }] as any)
     const n = await syncEdinetTimeline(db, 'k', '72030')
     expect(n).toBe(1)
     expect(fetchCompanyFilings).toHaveBeenCalled()
+    const values = db.insert.mock.results[0].value.values
+    expect(values).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ sourceUrl: 'https://example.com/DOC1.pdf' }),
+    ]))
   })
 
   it('syncEdinetForecasts upserts rows', async () => {
@@ -105,4 +110,3 @@ describe('edinetSyncService', () => {
     expect(n).toBe(1)
   })
 })
-

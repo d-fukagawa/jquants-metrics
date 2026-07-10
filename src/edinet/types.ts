@@ -11,6 +11,7 @@ export interface EdinetFiling {
   filingDate: string
   eventType: string
   title: string
+  sourceUrl?: string | null
   isAmendment?: boolean
   submittedAt?: string | null
 }

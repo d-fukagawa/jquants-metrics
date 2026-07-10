@@ -209,6 +209,33 @@ a { color: inherit; text-decoration: none; }
 .daily-ranking-note { margin: 12px 0 0; color: var(--muted-fg); font-size: 13px; }
 .daily-ranking-panel { margin-top: 20px; }
 .daily-ranking-table-scroll { overflow-x: auto; }
+
+.timeline-table-scroll { overflow-x: auto; }
+.timeline-table { min-width: 760px; }
+.timeline-stock-link {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  color: inherit;
+  text-decoration: none;
+}
+.timeline-stock-link:hover .timeline-stock-name { text-decoration: underline; }
+.timeline-stock-name { font-weight: 500; white-space: nowrap; }
+.timeline-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+.timeline-source-link:hover > span:first-child { text-decoration: underline; }
+.timeline-source-label {
+  flex: none;
+  color: var(--muted-fg);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.timeline-source-missing { color: var(--muted-fg); font-size: 11px; }
 .daily-ranking-table { min-width: 1560px; }
 .daily-ranking-table td { white-space: nowrap; }
 .daily-ranking-table td:nth-child(3) { white-space: normal; min-width: 180px; }

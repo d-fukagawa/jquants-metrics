@@ -17,7 +17,7 @@ DB は Neon PostgreSQL。`drizzle-kit migrate` で適用される。**migration 
 | `fins_details` | (`code`, `discNo`) | `code`, `discNo`, `discDate`, `pretaxProfit`, `taxExpense`, `dna` |
 | `financial_adjustments` | (`code`, `discNo`, `itemKey`, `direction`) | `category`, `amount`, `source` |
 | `edinet_company_map` | `code` | `code`, `edinetCode` |
-| `edinet_filings` | (`edinetCode`, `docId`) | `filingDate`, `eventType`, `isAmendment` |
+| `edinet_filings` | (`edinetCode`, `docId`) | `filingDate`, `eventType`, `isAmendment`, `sourceUrl` |
 | `edinet_forecasts` | (`code`, `horizon`, `fiscalYear`) | `salesForecast`, `opForecast`, `npForecast` |
 | `edinet_bridge_facts` | (`code`, `fiscalYear`, `periodType`) | `operatingProfit`, `pretaxProfit`, `cfo`, `adjustmentItemsJson` |
 | `edinet_quality_scores` | (`code`, `asOfDate`) | `qualityScore`, `componentsJson` |

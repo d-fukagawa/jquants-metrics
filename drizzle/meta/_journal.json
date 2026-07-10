@@ -57,6 +57,13 @@
       "when": 1781524743065,
       "tag": "0007_famous_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783678864502,
+      "tag": "0008_mighty_rattler",
+      "breakpoints": true
     }
   ]
 }

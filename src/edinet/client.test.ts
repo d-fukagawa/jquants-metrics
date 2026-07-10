@@ -43,13 +43,15 @@ describe('edinet client', () => {
           quarter: 3,
           title: 'Q3',
           is_correction: false,
-          pdf_url: 'DOC1',
+          doc_id: 'DOC1',
+          pdf_url: 'https://example.com/DOC1.pdf',
         }],
       }],
     })
     const rows = await fetchCompanyFilings(API_KEY, 'E00001')
     expect(rows).toHaveLength(1)
     expect(rows[0].docId).toBe('DOC1')
+    expect(rows[0].sourceUrl).toBe('https://example.com/DOC1.pdf')
   })
 
   it('fetchCompanyForecasts returns empty when next/next2 is unavailable', async () => {

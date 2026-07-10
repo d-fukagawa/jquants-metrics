@@ -44,6 +44,17 @@ function toStr(v: unknown): string | null {
   return s === '' ? null : s
 }
 
+function toHttpsUrl(v: unknown): string | null {
+  const value = toStr(v)
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
 function toDateOrNull(v: unknown): string | null {
   const s = toStr(v)
   if (!s) return null
@@ -103,6 +114,7 @@ export async function fetchCompanyFilings(apiKey: string, edinetCode: string, fr
     const filingDate = dateRaw ? new Date(dateRaw).toISOString().slice(0, 10) : ''
     const quarter = toStr(r.quarter) ?? 'N/A'
     const fyEnd = toStr(r.fiscal_year_end ?? r.fiscalYearEnd) ?? ''
+    const sourceUrl = toHttpsUrl(r.pdf_url ?? r.pdfUrl)
     return {
       edinetCode,
       docId: toStr(r.doc_id ?? r.docId ?? r.pdf_url) ?? `${edinetCode}-${filingDate}-${idx}`,
@@ -110,6 +122,7 @@ export async function fetchCompanyFilings(apiKey: string, edinetCode: string, fr
       filingDate,
       eventType: `決算短信(Q${quarter})`,
       title: toStr(r.title) ?? `決算短信 ${fyEnd}`,
+      sourceUrl,
       isAmendment: Boolean(r.is_correction ?? r.isCorrection ?? false),
       submittedAt: null,
     }
