@@ -24,6 +24,9 @@ pnpm-debug.log*
 # misc
 .DS_Store
 
+# local temporary files (snapshots, reports, scratch work)
+tmp/
+
 # local docs (not versioned)
 doc/*ガイド*.md
 
