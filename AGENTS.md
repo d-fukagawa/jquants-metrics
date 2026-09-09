@@ -1,11 +1,10 @@
 # jquants-metrics: Codex Working Guide
 
 ## Goal
-- Build and maintain a Japanese stock screening/analysis app using Hono + Cloudflare Pages + Drizzle + Neon + JQuants API v2.
+- Build and maintain a Japanese stock screening/analysis app using Hono + Cloudflare Pages + Drizzle + Neon + JQuants API v2, supplemented by EDINET data.
 
 ## First Read
 - `CLAUDE.md`
-- `doc/plan.md`
 - `doc/contracts/README.md` — public surface contracts (do not break)
 - `src/routes/CLAUDE.md`
 - `src/services/CLAUDE.md`
@@ -39,6 +38,10 @@
 - Keep route handlers thin; move business logic to `src/services/`.
 - Add or update tests for behavior changes.
 - After code changes, run relevant tests before finishing.
+
+## Documentation
+- Document purpose, rationale, and lasting policies; avoid duplicating lists or concrete values available in code and configuration.
+- Keep temporary research and task plans in `tmp/`, outside Git.
 
 ## Directory Notes
 - For route work: read `src/routes/AGENTS.md`.

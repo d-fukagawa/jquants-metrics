@@ -2,8 +2,7 @@
 
 日本株スクリーニング・分析 Web ツール。JQuants API v2 + Hono + Cloudflare Pages。
 
-プロジェクト計画: @doc/plan.md
-技術スタック・スキーマ詳細: @doc/plan.md
+開発方針・文書運用: @AGENTS.md
 互換契約 (壊してはいけない公開面): @doc/contracts/README.md
 
 ## 開発コマンド

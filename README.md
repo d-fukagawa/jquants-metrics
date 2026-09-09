@@ -29,7 +29,6 @@ jquants-metrics/
 ├── drizzle.config.ts
 ├── .dev.vars                   # ローカル用シークレット（gitignore）
 ├── doc/
-│   ├── plan.md                 # 実装計画
 │   └── mock/                   # UIモック（静的HTML）
 ├── public/
 │   └── style.css
@@ -91,7 +90,7 @@ npm run deploy       # Cloudflare Pages へデプロイ
 
 ## ドキュメント
 
-- [実装計画](doc/plan.md)
+- [開発方針・作業規約](AGENTS.md)
 
 ---
 
