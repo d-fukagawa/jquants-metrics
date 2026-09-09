@@ -20,7 +20,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
-    "verify": "bash bin/verify"
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

@@ -14,6 +14,7 @@ bin/lint             # biome check + tsc --noEmit
 bin/test             # vitest run
 bin/setup            # npm ci
 
+npm run verify       # Windows/PowerShell の bin/verify 完全互換入口
 npm run dev          # Vite dev server（ローカル開発）
 npm run build        # ビルド
 npm run preview      # wrangler pages dev（本番相当）

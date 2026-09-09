@@ -83,6 +83,19 @@
 
 各スクリプトは `set -euo pipefail`。exit code 伝播。
 
+### Windows / PowerShell 互換入口
+
+`/bin/bash` がない環境では、`bin/*` と同じ責務を次の npm コマンドで実行する。
+
+| Bash 入口 | Windows / PowerShell 置換 |
+|---|---|
+| `bash bin/setup` | `npm ci` |
+| `bash bin/lint` | `npm run lint` → `npm run typecheck` |
+| `bash bin/test` | `npm test` |
+| `bash bin/verify` | `npm run verify` |
+
+`npm run verify` の順序と exit code の意味は `bin/verify` と同じとする。これは入口の追加であり、既存の `bin/*` を置き換えたり削除したりしない。
+
 ## Breaking change の例
 
 - スクリプト名 rename / 削除 (workflow が直参照)

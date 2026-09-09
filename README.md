@@ -74,6 +74,7 @@ npm run dev
 npm run dev          # 開発サーバー起動（Vite）
 npm run build        # ビルド
 npm run preview      # ビルド後のローカルプレビュー（Wrangler）
+npm run verify       # 最終検証（Windows/PowerShell対応）
 npm run db:generate  # Drizzle マイグレーションファイル生成
 npm run db:migrate   # DB マイグレーション実行
 npm run db:studio    # Drizzle Studio（DB GUI）

@@ -24,6 +24,10 @@
 ## Commands
 - `bin/verify` — single quality gate (lint + typecheck + test + build). Run before finishing.
 - `bin/lint`, `bin/test`, `bin/setup` — granular entrypoints.
+- Windows / PowerShell without `/bin/bash`: use `npm run verify` as the exact `bin/verify` replacement.
+  - `bin/lint` → `npm run lint` then `npm run typecheck`
+  - `bin/test` → `npm test`
+  - `bin/setup` → `npm ci`
 - `npm run dev` — local dev server.
 - `npm run build` — production build.
 - `npm run preview` — wrangler pages dev (production-like).
