@@ -1,5 +1,17 @@
-DATABASE_URL=postgres://user:pass@host/dbname?sslmode=require
+# DATABASE_URL は「アクティブ」な接続先 (ローカル開発・db:sync-from-prod の対象)。
+# dev branch を指す URL を入れること。production を直接指すとローカル開発が本番に書き込む。
+DATABASE_URL=postgres://neondb_owner:pass@ep-dev-xxxx.../neondb?sslmode=require
+
+# 参考用: production branch の接続文字列 (普段は使わない)。
+# DATABASE_URL を間違えて切り戻したいときの記録としてここに残す。
+# DATABASE_URL_PROD=postgres://neondb_owner:pass@ep-prod-xxxx.../neondb?sslmode=require
+
 JQUANTS_API_KEY=your_api_key_here
 SYNC_SECRET=your_sync_secret_here
 EDINETDB_API_KEY=your_api_key_here2
 EDINET_API_KEY=your_api_key_here3
+
+# `npm run db:sync-from-prod` (本番 → ローカル DB 同期) で使用。
+# 未使用なら空のままで可。
+NEON_API_KEY=
+NEON_DEV_BRANCH_ID=

@@ -1,0 +1,59 @@
+name: DB Sync From Prod (weekly)
+
+# 週に一回、Neon production branch の最新スナップショットでローカル/個人 dev branch を reset する。
+# 対象 dev branch のユーザーテーブル (themes, theme_stocks, stock_memo_meta, stock_memos) は
+# scripts/sync-from-prod.ts が退避→復元するので保持される。
+#
+# 必要 secrets:
+#   DATABASE_URL_DEV    dev branch の接続文字列 (production を指す DATABASE_URL とは別)
+#   NEON_API_KEY        Neon API キー
+#   NEON_DEV_BRANCH_ID  reset 対象の dev branch ID
+#   DISCORD_WEBHOOK_URL 失敗通知用
+
+on:
+  schedule:
+    # 毎週月曜 23:00 UTC = 火曜 08:00 JST
+    # production 側の daily-sync (平日 18:00 JST) が前日金曜まで反映済みの状態で同期される
+    - cron: '0 23 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync-from-prod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: 本番 → dev branch 同期
+        id: sync
+        shell: bash
+        env:
+          DATABASE_URL:       ${{ secrets.DATABASE_URL_DEV }}
+          NEON_API_KEY:       ${{ secrets.NEON_API_KEY }}
+          NEON_DEV_BRANCH_ID: ${{ secrets.NEON_DEV_BRANCH_ID }}
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/sync-from-prod.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1
