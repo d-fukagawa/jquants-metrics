@@ -40,10 +40,14 @@
 - After code changes, run relevant tests before finishing.
 
 ## Documentation
+- `doc/` is committed documentation for lasting project and application decisions, including functional policy and implementation policy. Content must be organized and safe to publish.
+- Do not put plans, schedules, task tracking, unreviewed notes, or content unsuitable for publication in `doc/`.
+- `tmp/` is the uncommitted workspace for plans, schedules, unpublished material, and anything not yet organized. It stays outside Git.
+- Move material from `tmp/` to `doc/` only after it is organized, expected to remain useful, and safe to publish.
+- Store actual credentials only in the designated secret stores and ignored secret files, not in either documentation directory.
 - Document purpose, rationale, and lasting policies; avoid duplicating lists or concrete values available in code and configuration.
 - Treat code, configuration, migrations, workflows, and tests as the source of truth for concrete interfaces and defaults.
 - Keep `doc/contracts/` limited to compatibility boundaries that are not obvious from those sources.
-- Keep temporary research and task plans in `tmp/`, outside Git.
 
 ## Directory Notes
 - For route work: read `src/routes/AGENTS.md`.
