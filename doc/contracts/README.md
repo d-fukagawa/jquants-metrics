@@ -1,29 +1,27 @@
-# 互換契約 (Public Surface Contracts)
+# 公開面の互換性境界
 
-このディレクトリの文書は「内部実装をどう変えてもよいが、これだけは壊してはいけない」面を定義する。
-詳細な背景は [doc/harness/05_互換契約と設定分離仕様.md](../harness/05_互換契約と設定分離仕様.md) を参照。
+この文書は、既存の利用者や運用を壊す変更の境界を定義する。現在の名前、値、一覧はコード、設定、マイグレーション、ワークフロー、テストを参照する。
 
-## 文書一覧
+削除、名前や型の変更、任意項目の必須化、既定動作の変更は原則として破壊的変更である。破壊的変更は実装前に利用箇所と移行方法を確認し、ユーザー判断を受ける。既存の解釈を変えない任意項目や新しい入口の追加は非破壊的変更として扱える。
 
-| 文書 | 対象 |
-|---|---|
-| [api.md](api.md) | HTTP API (`/api/sync`) と HTML/JSON ルート |
-| [cli.md](cli.md) | `scripts/*.ts` の引数・env・exit code・stdout |
-| [db.md](db.md) | Drizzle schema (`src/db/schema.ts`) のテーブル/カラム |
-| [jobs.md](jobs.md) | Cloudflare Cron と GitHub Actions ワークフロー |
-| [env.md](env.md) | 環境変数の境界 (secrets / 共有設定 / 個人設定) |
+## HTTP
 
-## 変更分類
+現在のルートと入出力は [ルート登録](../../src/index.tsx)、[ハンドラとテスト](../../src/routes/) を参照する。既存のパス、HTTP メソッド、認証、入力の意味、レスポンスの形式・型・状態・リダイレクト動作を維持する。
 
-各契約には「**additive change**」(既存利用者を壊さない追加) と「**breaking change**」(既存利用者を壊す変更) の境界を示す。
+## CLI
 
-- additive: optional key 追加 / 新エンドポイント / 内部リファクタ
-- breaking: 削除・rename・型変更・必須化・exit code の意味変更・cron 時刻変更
+現在の入口は [package.json](../../package.json)、[scripts/](../../scripts/)、[bin/](../../bin/)、[GitHub Actions](../../.github/workflows/) を参照する。既存の入口、必須引数と環境変数、終了状態、機械処理される出力を維持する。
 
-**breaking change は自動で進めず、人間レビューに返す** ([doc/harness/02 §8 中断条件](../harness/02_ハーネス全体仕様.md))。
+## DB
 
-## ルール
+現在のスキーマは [src/db/schema.ts](../../src/db/schema.ts)、変更履歴は [drizzle/](../../drizzle/) を参照する。既存のテーブル名、カラム名、型、NULL 可否、主キー、一意制約、外部キーを維持する。追加時は既存データ、upsert の競合キー、移行とロールバックを確認する。
 
-- 内部実装変更時は `bin/verify` を通すだけで OK
-- 公開面に触れる変更は、まずこの文書を更新してから実装する
-- 文書とテストの両方で守るのが原則 (片方だけに依存しない)
+## 環境変数と秘密情報
+
+現在の名前と利用箇所は [src/types.ts](../../src/types.ts)、[.dev.vars.example](../../.dev.vars.example)、[scripts/](../../scripts/)、[GitHub Actions](../../.github/workflows/) を参照する。共有できる例と設定だけをリポジトリに置き、個人用および本番の秘密値は置かない。Workers は `c.env.*`、Node.js スクリプトは `process.env.*` から受け取る。
+
+## 定期実行ジョブ
+
+現在のジョブ、時刻、入力は [GitHub Actions](../../.github/workflows/)、[wrangler.jsonc](../../wrangler.jsonc)、scheduled handler の実装を参照する。既存の実行時刻、入口、入力名、秘密情報名、処理順、成功・失敗判定、通知条件を維持する。変更時はタイムゾーン、重複実行時の安全性、失敗通知を確認する。
+
+各変更では関連するテストと呼び出し元を更新する。

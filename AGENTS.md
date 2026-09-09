@@ -41,6 +41,8 @@
 
 ## Documentation
 - Document purpose, rationale, and lasting policies; avoid duplicating lists or concrete values available in code and configuration.
+- Treat code, configuration, migrations, workflows, and tests as the source of truth for concrete interfaces and defaults.
+- Keep `doc/contracts/` limited to compatibility boundaries that are not obvious from those sources.
 - Keep temporary research and task plans in `tmp/`, outside Git.
 
 ## Directory Notes

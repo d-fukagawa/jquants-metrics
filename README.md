@@ -29,7 +29,7 @@ jquants-metrics/
 ├── drizzle.config.ts
 ├── .dev.vars                   # ローカル用シークレット（gitignore）
 ├── doc/
-│   └── mock/                   # UIモック（静的HTML）
+│   └── contracts/              # 公開面の互換性境界
 ├── public/
 │   └── style.css
 └── src/
