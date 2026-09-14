@@ -4,6 +4,7 @@ import * as stockService    from '../services/stockService'
 import * as priceService    from '../services/priceService'
 import * as stockEdinetService from '../services/stockEdinetService'
 import * as watchlistService from '../services/watchlistService'
+import * as stockValuationService from '../services/stockValuationService'
 // calcMetrics / fmtJpy は純粋関数なので実装をそのまま使う
 vi.mock('../services/financialService', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../services/financialService')>()
@@ -20,6 +21,7 @@ vi.mock('../services/stockService')
 vi.mock('../services/priceService')
 vi.mock('../services/stockEdinetService')
 vi.mock('../services/watchlistService')
+vi.mock('../services/stockValuationService')
 vi.mock('../db/client', () => ({ createDb: vi.fn().mockReturnValue({}) }))
 
 const ENV = {
@@ -62,9 +64,57 @@ const FINANCIALS = [{
   fSales: null, fOp: null, fNp: null, fEps: null, fDivAnn: null,
 }]
 
+const VALUATION_POINT: stockValuationService.StockValuationPoint = {
+  date: '2026-08-26',
+  epsTtm: 250,
+  epsCompanyForecast: 280,
+  previousEpsCompanyForecast: 250,
+  bps: 3100,
+  roeTtm: 0.08,
+  roeCompanyForecast: 0.09,
+  perTtm: 12.5,
+  perCompanyForecast: 11,
+  pbr: 1.1,
+  marketCapMillion: 4_500_000,
+  close: 3080,
+  epsChangePct: 12,
+  relatedDisclosureDate: '2026-08-25',
+  relatedDisclosureType: '2QFinancialStatements',
+  relatedPeriodType: '2Q',
+  corporateActionSuspected: false,
+}
+
+const VALUATION_ANALYSIS: stockValuationService.StockValuationAnalysis = {
+  latest: VALUATION_POINT,
+  series: [
+    VALUATION_POINT,
+    {
+      ...VALUATION_POINT,
+      date: '2026-08-25',
+      epsCompanyForecast: 250,
+      previousEpsCompanyForecast: null,
+      perCompanyForecast: 12,
+      close: 3000,
+      epsChangePct: null,
+      relatedDisclosureDate: null,
+      relatedDisclosureType: null,
+      relatedPeriodType: null,
+    },
+  ],
+  changes: [VALUATION_POINT],
+}
+
 async function get(path: string) {
   return stockRoute.request(path, { method: 'GET' }, ENV)
 }
+
+beforeEach(() => {
+  vi.mocked(stockValuationService.getStockValuationAnalysis).mockResolvedValue({
+    latest: null,
+    series: [],
+    changes: [],
+  })
+})
 
 // ---------- バリデーション ----------
 describe('GET /stock/:code — validation', () => {
@@ -177,6 +227,7 @@ describe('GET /stock/:code — found', () => {
         updatedAt: new Date('2026-02-02T00:00:00Z'),
       }],
     } as any)
+    vi.mocked(stockValuationService.getStockValuationAnalysis).mockResolvedValue(VALUATION_ANALYSIS)
   })
 
   it('returns 200', async () => {
@@ -276,6 +327,18 @@ describe('GET /stock/:code — found', () => {
     const html = await (await get('/7203')).text()
     expect(html).toContain('ウォッチ解除')
     expect(html).toContain('メモ一覧')
+  })
+
+  it('renders official valuation metrics, indexed chart, and disclosure relation', async () => {
+    const html = await (await get('/7203')).text()
+
+    expect(html).toContain('J-Quants 日次バリュエーション（公式算出）')
+    expect(html).toContain('会社予想 EPS')
+    expect(html).toContain('12.5倍')
+    expect(html).toContain('45,000 億円')
+    expect(html).toContain('期間先頭の正の値 = 100')
+    expect(html).toContain('開示後初回valuation')
+    expect(html).toContain('2026-08-25')
   })
 })
 

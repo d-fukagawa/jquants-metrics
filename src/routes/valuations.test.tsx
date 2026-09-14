@@ -35,6 +35,8 @@ const row: valuationService.ValuationRankingRow = {
   previousClose: 3000,
   priceChangePct: 2.67,
   epsPriceGapPct: 9.33,
+  epsPriceGap1mPct: 8.5,
+  epsPriceGap3mPct: 15.25,
   forecastVsTtmEpsPct: 12,
   roeTtm: 0.08,
   roeCompanyForecast: 0.09,
@@ -69,6 +71,9 @@ describe('GET /valuations', () => {
     expect(html).toContain('期間内決算開示あり')
     expect(html).toContain('+1.00pt')
     expect(html).toContain('45,000 億円')
+    expect(html).toContain('+8.50%')
+    expect(html).toContain('+15.25%')
+    expect(html).toContain('/valuations/csv?')
   })
 
   it('passes validated filters to the service', async () => {
@@ -108,5 +113,22 @@ describe('GET /valuations', () => {
 
     const html = await (await valuationsRoute.request('/', { method: 'GET' }, ENV)).text()
     expect(html).toContain('指定条件のバリュエーション変化がありません')
+  })
+
+  it('downloads CSV with the validated comparison settings', async () => {
+    const response = await valuationsRoute.request(
+      '/csv?date=2026-08-26&period=1m&ranking=eps_up_per_down&limit=50',
+      { method: 'GET' },
+      ENV,
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('text/csv; charset=utf-8')
+    expect(response.headers.get('content-disposition')).toContain(
+      'valuation-ranking_2026-08-26_1m_eps_up_per_down_all_50.csv',
+    )
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+    expect(new TextDecoder().decode(bytes.slice(3))).toContain('1か月 EPS変化率-株価変化率')
   })
 })

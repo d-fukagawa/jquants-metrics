@@ -26,6 +26,8 @@ const baseRow = {
   previous_close: '3000',
   price_change_pct: '2.6667',
   eps_price_gap_pct: '9.3333',
+  eps_price_gap_1m_pct: '8.5',
+  eps_price_gap_3m_pct: '15.25',
   forecast_vs_ttm_eps_pct: '11.7764',
   roe_ttm: '0.0812',
   roe_company_forecast: '0.0904',
@@ -63,6 +65,8 @@ describe('listValuationRankings', () => {
       previousClose: 3000,
       priceChangePct: 2.6667,
       epsPriceGapPct: 9.3333,
+      epsPriceGap1mPct: 8.5,
+      epsPriceGap3mPct: 15.25,
       forecastVsTtmEpsPct: 11.7764,
       roeTtm: 0.0812,
       roeCompanyForecast: 0.0904,
@@ -84,6 +88,8 @@ describe('listValuationRankings', () => {
       previous_close: null,
       price_change_pct: null,
       eps_price_gap_pct: null,
+      eps_price_gap_1m_pct: null,
+      eps_price_gap_3m_pct: null,
       corporate_action_suspected: true,
     }])
 

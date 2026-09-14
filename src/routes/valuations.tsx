@@ -13,6 +13,7 @@ import {
   type ValuationRankingRow,
 } from '../services/valuationService'
 import type { Bindings } from '../types'
+import { serializeValuationRankingCsv } from '../services/valuationCsvService'
 
 export const valuationsRoute = new Hono<{ Bindings: Bindings }>()
 
@@ -119,6 +120,20 @@ function judgmentClass(judgment: ValuationRankingRow['judgment']): string {
   return 'valuation-badge--muted'
 }
 
+function valuationCsvUrl(
+  date: string | null,
+  filters: Extract<ParsedFilters, { ok: true }>,
+): string {
+  const params = new URLSearchParams({
+    period: filters.period,
+    ranking: filters.ranking,
+    limit: String(filters.limit),
+  })
+  if (date) params.set('date', date)
+  if (filters.market) params.set('market', filters.market)
+  return `/valuations/csv?${params.toString()}`
+}
+
 valuationsRoute.get('/', async (c) => {
   const filters = parseFilters(
     c.req.query('date'),
@@ -198,6 +213,7 @@ valuationsRoute.get('/', async (c) => {
             </label>
             <button class="btn-sm" type="submit">適用</button>
             <a class="btn-sm" href="/valuations">最新日</a>
+            <a class="btn-sm" href={valuationCsvUrl(result.date, filters)}>CSVダウンロード</a>
           </form>
           <p class="daily-ranking-note">
             Fwdはアナリスト予想ではなく会社予想です。EPS変化は修正候補であり、決算開示や株式分割等を確認してください。
@@ -229,6 +245,8 @@ valuationsRoute.get('/', async (c) => {
                 <th class="r">調整後終値</th>
                 <th class="r">株価変化率</th>
                 <th class="r">EPS−株価</th>
+                <th class="r">1か月 EPS−株価</th>
+                <th class="r">3か月 EPS−株価</th>
                 <th class="r">予想対TTM EPS</th>
                 <th class="r">TTM ROE</th>
                 <th class="r">会社予想ROE</th>
@@ -240,7 +258,7 @@ valuationsRoute.get('/', async (c) => {
             <tbody>
               {result.rows.length === 0 ? (
                 <tr>
-                  <td colspan={20} class="empty-state">
+                  <td colspan={22} class="empty-state">
                     {result.date ? '指定条件のバリュエーション変化がありません' : 'バリュエーションデータがありません'}
                   </td>
                 </tr>
@@ -260,6 +278,8 @@ valuationsRoute.get('/', async (c) => {
                   <td class="r">{fmtNumber(row.close)}</td>
                   <td class={`r ${changeClass(row.priceChangePct)}`}>{fmtPct(row.priceChangePct)}</td>
                   <td class={`r ${changeClass(row.epsPriceGapPct)}`}>{fmtPct(row.epsPriceGapPct)}</td>
+                  <td class={`r ${changeClass(row.epsPriceGap1mPct)}`}>{fmtPct(row.epsPriceGap1mPct)}</td>
+                  <td class={`r ${changeClass(row.epsPriceGap3mPct)}`}>{fmtPct(row.epsPriceGap3mPct)}</td>
                   <td class={`r ${changeClass(row.forecastVsTtmEpsPct)}`}>{fmtPct(row.forecastVsTtmEpsPct)}</td>
                   <td class="r">{fmtRoe(row.roeTtm)}</td>
                   <td class="r">{fmtRoe(row.roeCompanyForecast)}</td>
@@ -279,4 +299,39 @@ valuationsRoute.get('/', async (c) => {
     </div>,
     { wide: true },
   )
+})
+
+valuationsRoute.get('/csv', async (c) => {
+  const filters = parseFilters(
+    c.req.query('date'),
+    c.req.query('market'),
+    c.req.query('period'),
+    c.req.query('ranking'),
+    c.req.query('limit'),
+  )
+  if (!filters.ok) return c.text(filters.message, 400)
+
+  const { date, market, period, ranking, limit } = filters
+  const result = await listValuationRankings(createDb(c.env.DATABASE_URL), {
+    date,
+    market,
+    period,
+    ranking,
+    limit,
+  })
+  const filenameDate = result.date ?? date ?? 'no-data'
+  const filenameMarket = market === 'プライム'
+    ? 'prime'
+    : market === 'スタンダード'
+      ? 'standard'
+      : market === 'グロース'
+        ? 'growth'
+        : 'all'
+
+  c.header('Content-Type', 'text/csv; charset=utf-8')
+  c.header(
+    'Content-Disposition',
+    `attachment; filename="valuation-ranking_${filenameDate}_${period}_${ranking}_${filenameMarket}_${limit}.csv"`,
+  )
+  return c.body(serializeValuationRankingCsv(result, period))
 })

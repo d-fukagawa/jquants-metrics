@@ -45,6 +45,8 @@ export interface ValuationRankingRow {
   previousClose: number | null
   priceChangePct: number | null
   epsPriceGapPct: number | null
+  epsPriceGap1mPct: number | null
+  epsPriceGap3mPct: number | null
   forecastVsTtmEpsPct: number | null
   roeTtm: number | null
   roeCompanyForecast: number | null
@@ -149,6 +151,10 @@ export async function listValuationRankings(
         previous.per_company_forecast AS previous_per_company_forecast,
         current_price.adj_close AS current_close,
         previous_price.adj_close AS previous_close,
+        one_month.eps_company_forecast AS eps_company_forecast_1m,
+        one_month.adj_close AS close_1m,
+        three_month.eps_company_forecast AS eps_company_forecast_3m,
+        three_month.adj_close AS close_3m,
         EXISTS (
           SELECT 1
           FROM daily_prices action_price
@@ -184,6 +190,32 @@ export async function listValuationRankings(
       LEFT JOIN daily_prices previous_price
         ON previous_price.code = current_row.code
        AND previous_price.date = previous.date
+      LEFT JOIN LATERAL (
+        SELECT
+          history.eps_company_forecast,
+          history_price.adj_close
+        FROM equity_valuations history
+        LEFT JOIN daily_prices history_price
+          ON history_price.code = history.code
+         AND history_price.date = history.date
+        WHERE history.code = current_row.code
+          AND history.date <= current_row.date - INTERVAL '1 month'
+        ORDER BY history.date DESC
+        LIMIT 1
+      ) one_month ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          history.eps_company_forecast,
+          history_price.adj_close
+        FROM equity_valuations history
+        LEFT JOIN daily_prices history_price
+          ON history_price.code = history.code
+         AND history_price.date = history.date
+        WHERE history.code = current_row.code
+          AND history.date <= current_row.date - INTERVAL '3 months'
+        ORDER BY history.date DESC
+        LIMIT 1
+      ) three_month ON TRUE
     ),
     calculated AS (
       SELECT
@@ -213,7 +245,23 @@ export async function listValuationRankings(
           WHEN roe_company_forecast IS NOT NULL AND roe_ttm IS NOT NULL
             THEN (roe_company_forecast::float - roe_ttm::float) * 100
           ELSE NULL
-        END AS roe_improvement_point
+        END AS roe_improvement_point,
+        CASE
+          WHEN eps_company_forecast_1m::float <> 0 AND close_1m::float > 0
+            THEN (
+              eps_company_forecast::float / eps_company_forecast_1m::float
+              - current_close::float / close_1m::float
+            ) * 100
+          ELSE NULL
+        END AS eps_price_gap_1m_pct,
+        CASE
+          WHEN eps_company_forecast_3m::float <> 0 AND close_3m::float > 0
+            THEN (
+              eps_company_forecast::float / eps_company_forecast_3m::float
+              - current_close::float / close_3m::float
+            ) * 100
+          ELSE NULL
+        END AS eps_price_gap_3m_pct
       FROM paired
       WHERE comparison_date IS NOT NULL
         AND eps_company_forecast IS NOT NULL
@@ -263,6 +311,8 @@ export async function listValuationRankings(
       ranked.previous_close,
       ranked.price_change_pct,
       ranked.eps_price_gap_pct,
+      ranked.eps_price_gap_1m_pct,
+      ranked.eps_price_gap_3m_pct,
       ranked.forecast_vs_ttm_eps_pct,
       ranked.roe_ttm,
       ranked.roe_company_forecast,
@@ -309,6 +359,8 @@ export async function listValuationRankings(
         previousClose: toNullableNumber(row.previous_close),
         priceChangePct,
         epsPriceGapPct: toNullableNumber(row.eps_price_gap_pct),
+        epsPriceGap1mPct: toNullableNumber(row.eps_price_gap_1m_pct),
+        epsPriceGap3mPct: toNullableNumber(row.eps_price_gap_3m_pct),
         forecastVsTtmEpsPct: toNullableNumber(row.forecast_vs_ttm_eps_pct),
         roeTtm: toNullableNumber(row.roe_ttm),
         roeCompanyForecast: toNullableNumber(row.roe_company_forecast),

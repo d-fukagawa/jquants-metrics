@@ -22,7 +22,9 @@ import {
 import { getStockMemoPanel } from '../services/watchlistService'
 import { PriceChart } from '../components/PriceChart'
 import { MetricsCard } from '../components/MetricsCard'
+import { ValuationTrendChart } from '../components/ValuationTrendChart'
 import { parseCode4, toCode4, toCode5 } from '../utils/stockCode'
+import { getStockValuationAnalysis } from '../services/stockValuationService'
 
 export const stockRoute = new Hono<{ Bindings: Bindings }>()
 
@@ -34,12 +36,13 @@ stockRoute.get('/:code', async (c) => {
   const code5 = toCode5(code4)
   const db    = createDb(c.env.DATABASE_URL)
 
-  const [stock, prices, financials, finsDetail, adjustments] = await Promise.all([
+  const [stock, prices, financials, finsDetail, adjustments, valuationAnalysis] = await Promise.all([
     getStockByCode(db, code5),
     getRecentPrices(db, code5, 60),
     getLatestFinancials(db, code5),
     getFinsDetailsLatest(db, code5),
     getFinancialAdjustmentsLatest(db, code5),
+    getStockValuationAnalysis(db, code5),
   ])
   const [timeline, forecasts, bridge, qualityScore, textScore, memoPanel] = await Promise.all([
     getDisclosureTimeline(db, code5, 12),
@@ -94,6 +97,28 @@ stockRoute.get('/:code', async (c) => {
   function fmtDateTime(dt: Date): string {
     return new Date(dt).toISOString().replace('T', ' ').slice(0, 16)
   }
+
+  function fmtValuationNumber(value: number | null, digits = 2): string {
+    return value == null
+      ? '—'
+      : value.toLocaleString('ja-JP', { maximumFractionDigits: digits })
+  }
+
+  function fmtValuationPercent(value: number | null): string {
+    return value == null ? '—' : `${(value * 100).toFixed(2)}%`
+  }
+
+  function fmtValuationChange(value: number | null): string {
+    if (value == null) return '—'
+    const sign = value > 0 ? '+' : ''
+    return `${sign}${value.toFixed(2)}%`
+  }
+
+  function fmtValuationMultiple(value: number | null): string {
+    return value == null ? '—' : `${fmtValuationNumber(value)}倍`
+  }
+
+  const latestValuation = valuationAnalysis.latest
 
   return c.render(
     <div class="stock-detail-layout">
@@ -150,6 +175,123 @@ stockRoute.get('/:code', async (c) => {
 
         {/* 財務指標カード */}
         <MetricsCard metrics={metrics} />
+      </div>
+
+      <div class="section-title">J-Quants 日次バリュエーション（公式算出）</div>
+      <div class="card valuation-stock-panel" style="margin-bottom:20px">
+        <div class="card-header">
+          <span class="card-title">TTM・会社予想・市場評価</span>
+          <span class="card-sub">
+            {latestValuation ? `${latestValuation.date} 時点` : '未同期'}
+            {' · '}<a href="/valuations">全銘柄ランキング</a>
+          </span>
+        </div>
+        {latestValuation ? (
+          <>
+            <div class="valuation-stock-metrics">
+              <div class="valuation-stock-metric">
+                <span>TTM EPS</span>
+                <strong>¥{fmtValuationNumber(latestValuation.epsTtm)}</strong>
+              </div>
+              <div class="valuation-stock-metric">
+                <span>会社予想 EPS</span>
+                <strong>¥{fmtValuationNumber(latestValuation.epsCompanyForecast)}</strong>
+                <small class={latestValuation.epsChangePct != null && latestValuation.epsChangePct >= 0 ? 'up' : 'down'}>
+                  前回比 {fmtValuationChange(latestValuation.epsChangePct)}
+                </small>
+              </div>
+              <div class="valuation-stock-metric">
+                <span>TTM PER</span>
+                <strong>{fmtValuationMultiple(latestValuation.perTtm)}</strong>
+              </div>
+              <div class="valuation-stock-metric">
+                <span>会社予想 PER</span>
+                <strong>{fmtValuationMultiple(latestValuation.perCompanyForecast)}</strong>
+              </div>
+              <div class="valuation-stock-metric">
+                <span>PBR / BPS</span>
+                <strong>{fmtValuationMultiple(latestValuation.pbr)}</strong>
+                <small>BPS ¥{fmtValuationNumber(latestValuation.bps)}</small>
+              </div>
+              <div class="valuation-stock-metric">
+                <span>TTM / 会社予想 ROE</span>
+                <strong>
+                  {fmtValuationPercent(latestValuation.roeTtm)} / {fmtValuationPercent(latestValuation.roeCompanyForecast)}
+                </strong>
+              </div>
+              <div class="valuation-stock-metric">
+                <span>時価総額</span>
+                <strong>
+                  {latestValuation.marketCapMillion == null
+                    ? '—'
+                    : `${Math.round(latestValuation.marketCapMillion / 100).toLocaleString('ja-JP')} 億円`}
+                </strong>
+                <small>自己株式控除後</small>
+              </div>
+            </div>
+
+            <div class="valuation-chart-block">
+              <div class="valuation-chart-heading">
+                <strong>株価・会社予想EPS・会社予想PER</strong>
+                <span>期間先頭の正の値 = 100</span>
+              </div>
+              <ValuationTrendChart rows={valuationAnalysis.series} />
+            </div>
+
+            <div class="valuation-event-block">
+              <div class="valuation-chart-heading">
+                <strong>EPS変化・決算開示との対応</strong>
+                <span>決算内容は原則として翌営業日のvaluationから反映</span>
+              </div>
+              {valuationAnalysis.changes.length > 0 ? (
+                <div class="table-wrap">
+                  <table class="valuation-event-table">
+                    <thead>
+                      <tr>
+                        <th>Valuation日</th>
+                        <th>関連開示日</th>
+                        <th>期間</th>
+                        <th class="r">会社予想EPS</th>
+                        <th class="r">前回EPS</th>
+                        <th class="r">変化率</th>
+                        <th>確認</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {valuationAnalysis.changes.map(change => (
+                        <tr key={change.date}>
+                          <td>{change.date}</td>
+                          <td>{change.relatedDisclosureDate ?? '—'}</td>
+                          <td>{change.relatedPeriodType ?? '—'}</td>
+                          <td class="r">{fmtValuationNumber(change.epsCompanyForecast)}</td>
+                          <td class="r">{fmtValuationNumber(change.previousEpsCompanyForecast)}</td>
+                          <td class={`r ${(change.epsChangePct ?? 0) >= 0 ? 'up' : 'down'}`}>
+                            {fmtValuationChange(change.epsChangePct)}
+                          </td>
+                          <td>
+                            {change.relatedDisclosureDate
+                              ? <span class="valuation-flag">開示後初回valuation</span>
+                              : <span class="valuation-flag valuation-flag--warning">対応開示未確認</span>}
+                            {change.corporateActionSuspected && (
+                              <span class="valuation-flag valuation-flag--warning">株式分割等の可能性</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p class="empty-state">保存期間内に会社予想EPSの変化または新しい決算開示はありません。</p>
+              )}
+            </div>
+            <p class="valuation-source-note">
+              ソース: /v2/equities/valuation。既存の財務指標カードはアプリ算出値であり、このパネルのTTM・会社予想指標とは定義が異なります。
+            </p>
+          </>
+        ) : (
+          <p class="empty-state">J-Quants valuationデータがありません。valuation同期後に表示されます。</p>
+        )}
       </div>
 
       {/* 日次株価テーブル */}
