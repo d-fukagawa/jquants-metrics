@@ -30,6 +30,16 @@ const result: ValuationRankingResult = {
     roeCompanyForecast: 0.09,
     roeImprovementPoint: 1,
     marketCapMillion: 4_500_000,
+    perPercentile1y: 18.5,
+    perPercentile3y: 12.25,
+    perPercentile5y: 9.75,
+    perMedian1y: 14.2,
+    perMedian3y: 16.4,
+    perMedian5y: 18.1,
+    perObservationCount1y: 245,
+    perObservationCount3y: 735,
+    perObservationCount5y: 1220,
+    perHistoryStartDate: '2021-08-26',
     hasFinancialDisclosure: true,
     corporateActionSuspected: false,
     judgment: 'EPS上昇・PER低下',
@@ -42,6 +52,7 @@ describe('serializeValuationRankingCsv', () => {
 
     expect(csv.startsWith('\uFEFF基準日,比較期間,比較日')).toBe(true)
     expect(csv).toContain(',9.33,8.5,15.25,')
+    expect(csv).toContain(',18.5,14.2,245,12.25,16.4,735,9.75,18.1,1220,2021-08-26,')
     expect(csv).toContain(',あり,\r\n')
   })
 

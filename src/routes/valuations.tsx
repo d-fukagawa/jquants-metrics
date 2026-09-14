@@ -28,6 +28,9 @@ const rankingLabels: Record<ValuationRanking, string> = {
   eps_down: 'EPS低下',
   eps_up_per_down: 'EPS上昇・PER低下',
   expectation_driven: '期待先行',
+  historically_cheap: '最大5年PER低位',
+  roe_improvement: 'ROE改善',
+  forecast_growth: 'TTM→会社予想EPS成長',
 }
 
 function isIsoDate(value: string): boolean {
@@ -106,6 +109,26 @@ function fmtMultiple(value: number | null): string {
 
 function fmtMarketCap(value: number | null): string {
   return value == null ? '—' : `${Math.round(value / 100).toLocaleString('ja-JP')} 億円`
+}
+
+function PerHistoryCell({
+  percentile,
+  median,
+  count,
+  startDate,
+}: {
+  percentile: number | null
+  median: number | null
+  count: number
+  startDate?: string | null
+}) {
+  return (
+    <span class="valuation-history-cell">
+      <strong>{percentile == null ? '—' : `${percentile.toFixed(1)}%ile`}</strong>
+      <small>中央値 {median == null ? '—' : `${median.toFixed(2)}倍`} · n={count}</small>
+      {startDate && <small>開始 {startDate}</small>}
+    </span>
+  )
 }
 
 function changeClass(value: number | null): string {
@@ -219,6 +242,10 @@ valuationsRoute.get('/', async (c) => {
             Fwdはアナリスト予想ではなく会社予想です。EPS変化は修正候補であり、決算開示や株式分割等を確認してください。
             期待先行は株価変化率がEPS変化率を10ポイント以上上回る状態です。
           </p>
+          <p class="daily-ranking-note">
+            PER位置は正の会社予想PERだけを使用します。「最大5年」は保存済み期間内の最大5年で、開始日と観測数を併記します。
+            最大5年PER低位ランキングは観測200件以上かつ20 percentile以下が対象です。
+          </p>
         </div>
       </section>
 
@@ -252,13 +279,16 @@ valuationsRoute.get('/', async (c) => {
                 <th class="r">会社予想ROE</th>
                 <th class="r">ROE差</th>
                 <th class="r">時価総額</th>
+                <th class="r">1年PER位置</th>
+                <th class="r">3年PER位置</th>
+                <th class="r">最大5年PER位置</th>
                 <th>判定・確認</th>
               </tr>
             </thead>
             <tbody>
               {result.rows.length === 0 ? (
                 <tr>
-                  <td colspan={22} class="empty-state">
+                  <td colspan={25} class="empty-state">
                     {result.date ? '指定条件のバリュエーション変化がありません' : 'バリュエーションデータがありません'}
                   </td>
                 </tr>
@@ -268,7 +298,7 @@ valuationsRoute.get('/', async (c) => {
                   <td><a href={`/stock/${row.code4}`}>{row.code4}</a></td>
                   <td><a href={`/stock/${row.code4}`}>{row.coName}</a></td>
                   <td>{row.market}</td>
-                  <td>{row.comparisonDate}</td>
+                  <td>{row.comparisonDate ?? '—'}</td>
                   <td class="r">{fmtNumber(row.epsCompanyForecast)}</td>
                   <td class="r">{fmtNumber(row.previousEpsCompanyForecast)}</td>
                   <td class={`r ${changeClass(row.epsChange)}`}>{fmtNumber(row.epsChange)}</td>
@@ -285,6 +315,28 @@ valuationsRoute.get('/', async (c) => {
                   <td class="r">{fmtRoe(row.roeCompanyForecast)}</td>
                   <td class={`r ${changeClass(row.roeImprovementPoint)}`}>{fmtPoint(row.roeImprovementPoint)}</td>
                   <td class="r">{fmtMarketCap(row.marketCapMillion)}</td>
+                  <td class="r">
+                    <PerHistoryCell
+                      percentile={row.perPercentile1y}
+                      median={row.perMedian1y}
+                      count={row.perObservationCount1y}
+                    />
+                  </td>
+                  <td class="r">
+                    <PerHistoryCell
+                      percentile={row.perPercentile3y}
+                      median={row.perMedian3y}
+                      count={row.perObservationCount3y}
+                    />
+                  </td>
+                  <td class="r">
+                    <PerHistoryCell
+                      percentile={row.perPercentile5y}
+                      median={row.perMedian5y}
+                      count={row.perObservationCount5y}
+                      startDate={row.perHistoryStartDate}
+                    />
+                  </td>
                   <td>
                     <span class={`valuation-badge ${judgmentClass(row.judgment)}`}>{row.judgment}</span>
                     {row.hasFinancialDisclosure && <span class="valuation-flag">期間内決算開示あり</span>}

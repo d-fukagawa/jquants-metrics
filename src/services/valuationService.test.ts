@@ -33,6 +33,16 @@ const baseRow = {
   roe_company_forecast: '0.0904',
   roe_improvement_point: '0.92',
   market_cap_million: '4500000',
+  per_percentile_1y: '18.5',
+  per_percentile_3y: '12.25',
+  per_percentile_5y: '9.75',
+  per_median_1y: '14.2',
+  per_median_3y: '16.4',
+  per_median_5y: '18.1',
+  per_observation_count_1y: 245,
+  per_observation_count_3y: 735,
+  per_observation_count_5y: 1220,
+  per_history_start_date: '2021-08-26',
   has_financial_disclosure: true,
   corporate_action_suspected: false,
 }
@@ -72,6 +82,16 @@ describe('listValuationRankings', () => {
       roeCompanyForecast: 0.0904,
       roeImprovementPoint: 0.92,
       marketCapMillion: 4500000,
+      perPercentile1y: 18.5,
+      perPercentile3y: 12.25,
+      perPercentile5y: 9.75,
+      perMedian1y: 14.2,
+      perMedian3y: 16.4,
+      perMedian5y: 18.1,
+      perObservationCount1y: 245,
+      perObservationCount3y: 735,
+      perObservationCount5y: 1220,
+      perHistoryStartDate: '2021-08-26',
       hasFinancialDisclosure: true,
       corporateActionSuspected: false,
       judgment: 'EPS上昇・PER低下',
@@ -118,5 +138,31 @@ describe('listValuationRankings', () => {
 
     expect(result).toEqual({ date: '2026-08-24', rows: [] })
     expect(execute).toHaveBeenCalledOnce()
+  })
+
+  it('preserves missing comparison data for current-value rankings', async () => {
+    const { db } = makeMockDb([{
+      ...baseRow,
+      comparison_date: null,
+      previous_eps_company_forecast: null,
+      previous_per_company_forecast: null,
+      eps_change: null,
+      eps_change_pct: null,
+      per_change_pct: null,
+      previous_close: null,
+      price_change_pct: null,
+      eps_price_gap_pct: null,
+    }])
+
+    const row = (await listValuationRankings(db, { ranking: 'historically_cheap' })).rows[0]
+
+    expect(row).toMatchObject({
+      comparisonDate: null,
+      previousEpsCompanyForecast: null,
+      epsChange: null,
+      epsChangePct: null,
+      judgment: '要確認',
+      perPercentile5y: 9.75,
+    })
   })
 })

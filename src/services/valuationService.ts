@@ -12,6 +12,9 @@ export const VALUATION_RANKINGS = [
   'eps_down',
   'eps_up_per_down',
   'expectation_driven',
+  'historically_cheap',
+  'roe_improvement',
+  'forecast_growth',
 ] as const
 export type ValuationRanking = typeof VALUATION_RANKINGS[number]
 
@@ -32,12 +35,12 @@ export interface ValuationRankingRow {
   code4: string
   coName: string
   market: string
-  comparisonDate: string
+  comparisonDate: string | null
   epsTtm: number | null
   epsCompanyForecast: number
-  previousEpsCompanyForecast: number
-  epsChange: number
-  epsChangePct: number
+  previousEpsCompanyForecast: number | null
+  epsChange: number | null
+  epsChangePct: number | null
   perCompanyForecast: number | null
   previousPerCompanyForecast: number | null
   perChangePct: number | null
@@ -52,6 +55,16 @@ export interface ValuationRankingRow {
   roeCompanyForecast: number | null
   roeImprovementPoint: number | null
   marketCapMillion: number | null
+  perPercentile1y: number | null
+  perPercentile3y: number | null
+  perPercentile5y: number | null
+  perMedian1y: number | null
+  perMedian3y: number | null
+  perMedian5y: number | null
+  perObservationCount1y: number
+  perObservationCount3y: number
+  perObservationCount5y: number
+  perHistoryStartDate: string | null
   hasFinancialDisclosure: boolean
   corporateActionSuspected: boolean
   judgment: '業績優位' | '期待先行' | 'EPS上昇・PER低下' | '要確認'
@@ -73,19 +86,19 @@ function toBoolean(value: unknown): boolean {
 }
 
 function classify(row: {
-  epsChangePct: number
+  epsChangePct: number | null
   perChangePct: number | null
   priceChangePct: number | null
   corporateActionSuspected: boolean
 }): ValuationRankingRow['judgment'] {
   if (row.corporateActionSuspected) return '要確認'
-  if (row.epsChangePct > 0 && row.perChangePct != null && row.perChangePct < 0) {
+  if (row.epsChangePct != null && row.epsChangePct > 0 && row.perChangePct != null && row.perChangePct < 0) {
     return 'EPS上昇・PER低下'
   }
-  if (row.priceChangePct != null && row.priceChangePct - row.epsChangePct >= 10) {
+  if (row.priceChangePct != null && row.epsChangePct != null && row.priceChangePct - row.epsChangePct >= 10) {
     return '期待先行'
   }
-  if (row.priceChangePct != null && row.epsChangePct > row.priceChangePct) {
+  if (row.priceChangePct != null && row.epsChangePct != null && row.epsChangePct > row.priceChangePct) {
     return '業績優位'
   }
   return '要確認'
@@ -119,14 +132,26 @@ export async function listValuationRankings(
       ? sql`eps_change_pct > 0 AND per_change_pct < 0`
       : ranking === 'expectation_driven'
         ? sql`price_change_pct - eps_change_pct >= 10`
-        : sql`eps_change_pct > 0`
+        : ranking === 'historically_cheap'
+          ? sql`per_percentile_5y <= 20 AND per_observation_count_5y >= 200`
+          : ranking === 'roe_improvement'
+            ? sql`roe_improvement_point > 0`
+            : ranking === 'forecast_growth'
+              ? sql`forecast_vs_ttm_eps_pct > 0`
+              : sql`eps_change_pct > 0`
   const rankingScore = ranking === 'eps_down'
     ? sql`-eps_change_pct`
     : ranking === 'eps_up_per_down'
       ? sql`eps_change_pct - per_change_pct`
       : ranking === 'expectation_driven'
         ? sql`price_change_pct - eps_change_pct`
-        : sql`eps_change_pct`
+        : ranking === 'historically_cheap'
+          ? sql`100 - per_percentile_5y`
+          : ranking === 'roe_improvement'
+            ? sql`roe_improvement_point`
+            : ranking === 'forecast_growth'
+              ? sql`forecast_vs_ttm_eps_pct`
+              : sql`eps_change_pct`
 
   const result = await db.execute(sql`
     WITH selected_date AS (
@@ -143,6 +168,68 @@ export async function listValuationRankings(
       WHERE TRUE
         ${marketFilter}
     ),
+    historical_per_stats AS (
+      SELECT
+        current_row.code,
+        MIN(history.date)::text AS per_history_start_date,
+        COUNT(history.date) FILTER (
+          WHERE history.date >= current_row.date - INTERVAL '1 year'
+        )::int AS per_observation_count_1y,
+        COUNT(history.date) FILTER (
+          WHERE history.date >= current_row.date - INTERVAL '3 years'
+        )::int AS per_observation_count_3y,
+        COUNT(history.date)::int AS per_observation_count_5y,
+        percentile_cont(0.5) WITHIN GROUP (
+          ORDER BY history.per_company_forecast::float
+        ) FILTER (
+          WHERE history.date >= current_row.date - INTERVAL '1 year'
+        ) AS per_median_1y,
+        percentile_cont(0.5) WITHIN GROUP (
+          ORDER BY history.per_company_forecast::float
+        ) FILTER (
+          WHERE history.date >= current_row.date - INTERVAL '3 years'
+        ) AS per_median_3y,
+        percentile_cont(0.5) WITHIN GROUP (
+          ORDER BY history.per_company_forecast::float
+        ) AS per_median_5y,
+        CASE
+          WHEN current_row.per_company_forecast::float > 0 THEN
+            COUNT(history.date) FILTER (
+              WHERE history.date >= current_row.date - INTERVAL '1 year'
+                AND history.per_company_forecast::float <= current_row.per_company_forecast::float
+            )::float
+            / NULLIF(COUNT(history.date) FILTER (
+              WHERE history.date >= current_row.date - INTERVAL '1 year'
+            ), 0) * 100
+          ELSE NULL
+        END AS per_percentile_1y,
+        CASE
+          WHEN current_row.per_company_forecast::float > 0 THEN
+            COUNT(history.date) FILTER (
+              WHERE history.date >= current_row.date - INTERVAL '3 years'
+                AND history.per_company_forecast::float <= current_row.per_company_forecast::float
+            )::float
+            / NULLIF(COUNT(history.date) FILTER (
+              WHERE history.date >= current_row.date - INTERVAL '3 years'
+            ), 0) * 100
+          ELSE NULL
+        END AS per_percentile_3y,
+        CASE
+          WHEN current_row.per_company_forecast::float > 0 THEN
+            COUNT(history.date) FILTER (
+              WHERE history.per_company_forecast::float <= current_row.per_company_forecast::float
+            )::float
+            / NULLIF(COUNT(history.date), 0) * 100
+          ELSE NULL
+        END AS per_percentile_5y
+      FROM current_valuations current_row
+      LEFT JOIN equity_valuations history
+        ON history.code = current_row.code
+       AND history.date <= current_row.date
+       AND history.date >= current_row.date - INTERVAL '5 years'
+       AND history.per_company_forecast::float > 0
+      GROUP BY current_row.code, current_row.date, current_row.per_company_forecast
+    ),
     paired AS (
       SELECT
         current_row.*,
@@ -155,6 +242,16 @@ export async function listValuationRankings(
         one_month.adj_close AS close_1m,
         three_month.eps_company_forecast AS eps_company_forecast_3m,
         three_month.adj_close AS close_3m,
+        per_stats.per_history_start_date,
+        per_stats.per_observation_count_1y,
+        per_stats.per_observation_count_3y,
+        per_stats.per_observation_count_5y,
+        per_stats.per_median_1y,
+        per_stats.per_median_3y,
+        per_stats.per_median_5y,
+        per_stats.per_percentile_1y,
+        per_stats.per_percentile_3y,
+        per_stats.per_percentile_5y,
         EXISTS (
           SELECT 1
           FROM daily_prices action_price
@@ -172,6 +269,7 @@ export async function listValuationRankings(
             AND financial.disc_date <= current_row.date
         ) AS has_financial_disclosure
       FROM current_valuations current_row
+      JOIN historical_per_stats per_stats ON per_stats.code = current_row.code
       LEFT JOIN LATERAL (
         SELECT
           previous.date,
@@ -263,10 +361,6 @@ export async function listValuationRankings(
           ELSE NULL
         END AS eps_price_gap_3m_pct
       FROM paired
-      WHERE comparison_date IS NOT NULL
-        AND eps_company_forecast IS NOT NULL
-        AND previous_eps_company_forecast IS NOT NULL
-        AND previous_eps_company_forecast::float <> 0
     ),
     with_gap AS (
       SELECT
@@ -318,6 +412,16 @@ export async function listValuationRankings(
       ranked.roe_company_forecast,
       ranked.roe_improvement_point,
       ranked.market_cap_million,
+      ranked.per_history_start_date,
+      ranked.per_observation_count_1y,
+      ranked.per_observation_count_3y,
+      ranked.per_observation_count_5y,
+      ranked.per_median_1y,
+      ranked.per_median_3y,
+      ranked.per_median_5y,
+      ranked.per_percentile_1y,
+      ranked.per_percentile_3y,
+      ranked.per_percentile_5y,
       ranked.has_financial_disclosure,
       ranked.corporate_action_suspected
     FROM selected_date selected
@@ -330,7 +434,7 @@ export async function listValuationRankings(
   const rows = rawRows
     .filter(row => row.code != null)
     .map((row): ValuationRankingRow => {
-      const epsChangePct = Number(row.eps_change_pct)
+      const epsChangePct = toNullableNumber(row.eps_change_pct)
       const perChangePct = toNullableNumber(row.per_change_pct)
       const priceChangePct = toNullableNumber(row.price_change_pct)
       const corporateActionSuspected = toBoolean(row.corporate_action_suspected)
@@ -346,11 +450,11 @@ export async function listValuationRankings(
         code4: String(row.code).slice(0, 4),
         coName: String(row.co_name ?? ''),
         market: String(row.mkt_nm ?? ''),
-        comparisonDate: String(row.comparison_date),
+        comparisonDate: row.comparison_date == null ? null : String(row.comparison_date),
         epsTtm: toNullableNumber(row.eps_ttm),
         epsCompanyForecast: Number(row.eps_company_forecast),
-        previousEpsCompanyForecast: Number(row.previous_eps_company_forecast),
-        epsChange: Number(row.eps_change),
+        previousEpsCompanyForecast: toNullableNumber(row.previous_eps_company_forecast),
+        epsChange: toNullableNumber(row.eps_change),
         epsChangePct,
         perCompanyForecast: toNullableNumber(row.per_company_forecast),
         previousPerCompanyForecast: toNullableNumber(row.previous_per_company_forecast),
@@ -366,6 +470,18 @@ export async function listValuationRankings(
         roeCompanyForecast: toNullableNumber(row.roe_company_forecast),
         roeImprovementPoint: toNullableNumber(row.roe_improvement_point),
         marketCapMillion: toNullableNumber(row.market_cap_million),
+        perPercentile1y: toNullableNumber(row.per_percentile_1y),
+        perPercentile3y: toNullableNumber(row.per_percentile_3y),
+        perPercentile5y: toNullableNumber(row.per_percentile_5y),
+        perMedian1y: toNullableNumber(row.per_median_1y),
+        perMedian3y: toNullableNumber(row.per_median_3y),
+        perMedian5y: toNullableNumber(row.per_median_5y),
+        perObservationCount1y: Number(row.per_observation_count_1y ?? 0),
+        perObservationCount3y: Number(row.per_observation_count_3y ?? 0),
+        perObservationCount5y: Number(row.per_observation_count_5y ?? 0),
+        perHistoryStartDate: row.per_history_start_date == null
+          ? null
+          : String(row.per_history_start_date),
         hasFinancialDisclosure: toBoolean(row.has_financial_disclosure),
         corporateActionSuspected,
         judgment: classify(classification),

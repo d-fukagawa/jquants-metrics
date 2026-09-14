@@ -42,6 +42,16 @@ const row: valuationService.ValuationRankingRow = {
   roeCompanyForecast: 0.09,
   roeImprovementPoint: 1,
   marketCapMillion: 4_500_000,
+  perPercentile1y: 18.5,
+  perPercentile3y: 12.25,
+  perPercentile5y: 9.75,
+  perMedian1y: 14.2,
+  perMedian3y: 16.4,
+  perMedian5y: 18.1,
+  perObservationCount1y: 245,
+  perObservationCount3y: 735,
+  perObservationCount5y: 1220,
+  perHistoryStartDate: '2021-08-26',
   hasFinancialDisclosure: true,
   corporateActionSuspected: false,
   judgment: 'EPS上昇・PER低下',
@@ -74,6 +84,14 @@ describe('GET /valuations', () => {
     expect(html).toContain('+8.50%')
     expect(html).toContain('+15.25%')
     expect(html).toContain('/valuations/csv?')
+    expect(html).toContain('最大5年PER位置')
+    expect(html).toContain('9.8%ile')
+    expect(html).toContain('n=1220')
+    expect(html).toContain('開始 2021-08-26')
+    expect(html).toContain('最大5年PER低位')
+    expect(html).toContain('ROE改善')
+    expect(html).toContain('TTM→会社予想EPS成長')
+    expect(html).toContain('観測200件以上')
   })
 
   it('passes validated filters to the service', async () => {

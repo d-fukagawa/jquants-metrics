@@ -347,10 +347,13 @@ a { color: inherit; text-decoration: none; }
 .daily-ranking-rank { font-weight: 700; }
 .daily-ranking-turnover { font-variant-numeric: tabular-nums; font-weight: 600; }
 .valuation-filter { align-items: end; }
-.valuation-table { min-width: 2100px; }
+.valuation-table { min-width: 2600px; }
 .valuation-table td { white-space: nowrap; }
 .valuation-table td:nth-child(3) { white-space: normal; min-width: 180px; }
 .valuation-table td:last-child { min-width: 220px; }
+.valuation-history-cell { display: inline-flex; flex-direction: column; gap: 2px; }
+.valuation-history-cell strong { font-variant-numeric: tabular-nums; }
+.valuation-history-cell small { color: var(--muted-fg); font-size: 10px; }
 .valuation-badge,
 .valuation-flag {
   display: inline-block;
