@@ -22,6 +22,7 @@ describe('shared navigation', () => {
       '/',
       '/screen',
       '/rankings/daily',
+      '/valuations',
       '/buy-timing',
       '/themes',
       '/watchlist',

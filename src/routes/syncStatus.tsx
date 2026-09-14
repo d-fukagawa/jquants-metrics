@@ -15,6 +15,8 @@ const ACTIONS_LINKS = [
   { label: 'financial-sync', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/financial-sync.yml' },
   { label: 'backfill-prices', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/backfill-prices.yml' },
   { label: 'backfill-financials', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/backfill-financials.yml' },
+  { label: 'valuation-sync', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/valuation-sync.yml' },
+  { label: 'backfill-valuations', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/backfill-valuations.yml' },
   { label: 'edinet-watch-sync', href: 'https://github.com/d-fukagawa/jquants-metrics/actions/workflows/edinet-watch-sync.yml' },
 ] as const
 
@@ -58,6 +60,13 @@ syncStatusRoute.get('/', async (c) => {
             {s.financialCoveragePct != null ? `${s.financialCoveragePct.toFixed(1)}%` : '未同期'}
           </div>
           <div class="metric-sub">財務銘柄数: {fmtNum(s.financialCodeCount)} / {fmtNum(s.masterCount)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Valuation 最新日</div>
+          <div class="metric-value">{s.valuationLatestDate ?? '未同期'}</div>
+          <div class="metric-sub">
+            当日件数: {fmtNum(s.valuationLatestDateCount)} / {fmtNum(s.masterCount)}
+          </div>
         </div>
         <div class="metric-card">
           <div class="metric-label">株価不足数（最新日）</div>
@@ -132,6 +141,13 @@ syncStatusRoute.get('/', async (c) => {
               <td>{s.financialLatestDiscDate ?? '未同期'}</td>
               <td>{fmtNum(s.financialLatestDiscDateCount)}</td>
               <td>銘柄数: {fmtNum(s.financialCodeCount)}</td>
+            </tr>
+            <tr>
+              <td>equity_valuations</td>
+              <td>{fmtNum(s.valuationTotalCount)}</td>
+              <td>{s.valuationLatestDate ?? '未同期'}</td>
+              <td>{fmtNum(s.valuationLatestDateCount)}</td>
+              <td>日付数: {fmtNum(s.valuationDateCount)} / 銘柄数: {fmtNum(s.valuationCodeCount)}</td>
             </tr>
             <tr>
               <td>fins_details</td>

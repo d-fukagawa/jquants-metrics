@@ -4,7 +4,8 @@ JQuants API を使った日本株スクリーニング Web ツール。
 
 ## 概要
 
-- 銘柄を選択して株価推移・財務指標（PER/PBR/ROE）を確認する簡易分析から開始
+- 銘柄を選択して株価推移・財務指標（PER/PBR/ROE）を確認
+- 日次のTTM・会社予想指標から、EPS・予想PER・株価の変化をランキング表示
 - 後続フェーズで条件指定フィルタリングや高度な指標（EV, ROIC, EBITDA）へ拡張予定
 
 ## 技術スタック
@@ -74,6 +75,8 @@ npm run dev          # 開発サーバー起動（Vite）
 npm run build        # ビルド
 npm run preview      # ビルド後のローカルプレビュー（Wrangler）
 npm run verify       # 最終検証（Windows/PowerShell対応）
+npm run sync:daily:valuations    # 当日のバリュエーション指標を同期
+npm run sync:backfill:valuations # 過去のバリュエーション指標を補完
 npm run db:generate  # Drizzle マイグレーションファイル生成
 npm run db:migrate   # DB マイグレーション実行
 npm run db:studio    # Drizzle Studio（DB GUI）

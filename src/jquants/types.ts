@@ -45,6 +45,26 @@ export interface DailyBarsResponse {
   data: DailyBar[]
 }
 
+// GET /v2/equities/valuation
+export interface EquityValuation {
+  Date: string
+  Code: string
+  EPS: number | null
+  FwdEPS: number | null
+  BPS: number | null
+  ROE: number | null
+  FwdROE: number | null
+  PER: number | null
+  FwdPER: number | null
+  PBR: number | null
+  MktCap: number | null
+}
+
+export interface EquityValuationsResponse {
+  data: EquityValuation[]
+  pagination_key?: string
+}
+
 // GET /v2/fins/summary
 export interface FinancialSummary {
   DiscNo:      string  // 開示番号 (PK)

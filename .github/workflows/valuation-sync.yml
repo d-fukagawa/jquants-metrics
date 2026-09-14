@@ -1,0 +1,63 @@
+name: Valuation Sync
+
+on:
+  schedule:
+    # 平日 10:00 UTC（日本時間 19:00）に実行
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '取得日 (YYYY-MM-DD)。省略時は当日/JST'
+        required: false
+
+concurrency:
+  group: valuation-api-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-valuations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: 全銘柄 バリュエーション同期
+        id: sync
+        shell: bash
+        env:
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          SYNC_DATE:       ${{ inputs.date }}
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/daily-valuations-sync.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          if grep -Eq '(^|[^0-9])429([^0-9]|$)|Too Many Requests' sync.log; then
+            rate_limited=true
+          else
+            rate_limited=false
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$rate_limited" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RATE_LIMITED: ${{ steps.sync.outputs.rate_limited }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1

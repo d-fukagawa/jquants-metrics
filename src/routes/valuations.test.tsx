@@ -1,0 +1,112 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as valuationService from '../services/valuationService'
+import { valuationsRoute } from './valuations'
+
+vi.mock('../services/valuationService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/valuationService')>()
+  return { ...actual, listValuationRankings: vi.fn() }
+})
+vi.mock('../db/client', () => ({ createDb: vi.fn().mockReturnValue({}) }))
+
+const ENV = {
+  DATABASE_URL: 'postgres://test',
+  JQUANTS_API_KEY: 'test-key',
+  EDINETDB_API_KEY: 'edinet-key',
+  EDINET_API_KEY: 'official-edinet-key',
+  SYNC_SECRET: 'secret',
+}
+
+const row: valuationService.ValuationRankingRow = {
+  rank: 1,
+  code: '72030',
+  code4: '7203',
+  coName: 'トヨタ自動車',
+  market: 'プライム',
+  comparisonDate: '2026-08-25',
+  epsTtm: 250,
+  epsCompanyForecast: 280,
+  previousEpsCompanyForecast: 250,
+  epsChange: 30,
+  epsChangePct: 12,
+  perCompanyForecast: 11,
+  previousPerCompanyForecast: 12,
+  perChangePct: -8.33,
+  close: 3080,
+  previousClose: 3000,
+  priceChangePct: 2.67,
+  epsPriceGapPct: 9.33,
+  forecastVsTtmEpsPct: 12,
+  roeTtm: 0.08,
+  roeCompanyForecast: 0.09,
+  roeImprovementPoint: 1,
+  marketCapMillion: 4_500_000,
+  hasFinancialDisclosure: true,
+  corporateActionSuspected: false,
+  judgment: 'EPS上昇・PER低下',
+}
+
+describe('GET /valuations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(valuationService.listValuationRankings).mockResolvedValue({
+      date: '2026-08-26',
+      rows: [row],
+    })
+  })
+
+  it('renders valuation changes, source semantics, and stock links', async () => {
+    const response = await valuationsRoute.request('/', { method: 'GET' }, ENV)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('業績・バリュエーション変化')
+    expect(html).toContain('会社予想')
+    expect(html).toContain('トヨタ自動車')
+    expect(html).toContain('/stock/7203')
+    expect(html).toContain('+12.00%')
+    expect(html).toContain('-8.33%')
+    expect(html).toContain('EPS上昇・PER低下')
+    expect(html).toContain('期間内決算開示あり')
+    expect(html).toContain('+1.00pt')
+    expect(html).toContain('45,000 億円')
+  })
+
+  it('passes validated filters to the service', async () => {
+    const response = await valuationsRoute.request(
+      '/?date=2026-08-26&market=%E3%82%B0%E3%83%AD%E3%83%BC%E3%82%B9&period=3m&ranking=expectation_driven&limit=100',
+      { method: 'GET' },
+      ENV,
+    )
+
+    expect(response.status).toBe(200)
+    expect(valuationService.listValuationRankings).toHaveBeenCalledWith({}, {
+      date: '2026-08-26',
+      market: 'グロース',
+      period: '3m',
+      ranking: 'expectation_driven',
+      limit: 100,
+    })
+  })
+
+  it.each([
+    ['date', '2026-02-30'],
+    ['market', 'invalid'],
+    ['period', '5y'],
+    ['ranking', 'invalid'],
+  ])('returns 400 for invalid %s', async (name, value) => {
+    const response = await valuationsRoute.request(`/?${name}=${value}`, { method: 'GET' }, ENV)
+
+    expect(response.status).toBe(400)
+    expect(valuationService.listValuationRankings).not.toHaveBeenCalled()
+  })
+
+  it('renders an empty state', async () => {
+    vi.mocked(valuationService.listValuationRankings).mockResolvedValue({
+      date: '2026-08-26',
+      rows: [],
+    })
+
+    const html = await (await valuationsRoute.request('/', { method: 'GET' }, ENV)).text()
+    expect(html).toContain('指定条件のバリュエーション変化がありません')
+  })
+})

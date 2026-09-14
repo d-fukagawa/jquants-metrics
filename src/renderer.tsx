@@ -4,6 +4,7 @@ const navigationItems = [
   { href: '/', label: 'ホーム' },
   { href: '/screen', label: 'スクリーニング' },
   { href: '/rankings/daily', label: 'ランキング' },
+  { href: '/valuations', label: '業績・評価' },
   { href: '/buy-timing', label: '買いタイミング' },
   { href: '/themes', label: 'テーマ' },
   { href: '/watchlist', label: 'ウォッチ' },

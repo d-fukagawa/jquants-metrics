@@ -1,0 +1,122 @@
+name: Backfill Valuations
+
+on:
+  schedule:
+    # 毎週土曜 14:30 UTC（日本時間 23:30）に直近30日を補完
+    - cron: '30 14 * * 6'
+  workflow_dispatch:
+    inputs:
+      from:
+        description: '取得開始日 (YYYY-MM-DD)。省略時は90日前/JST'
+        required: false
+      to:
+        description: '取得終了日 (YYYY-MM-DD)。省略時は昨日/JST'
+        required: false
+      retry_per_date:
+        description: '日付ごとのリトライ回数'
+        required: false
+        default: '3'
+
+concurrency:
+  group: valuation-api-sync
+  cancel-in-progress: false
+
+jobs:
+  backfill-valuations-manual:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: バリュエーション手動バックフィル
+        id: sync
+        shell: bash
+        env:
+          DATABASE_URL:     ${{ secrets.DATABASE_URL }}
+          JQUANTS_API_KEY:  ${{ secrets.JQUANTS_API_KEY }}
+          BACKFILL_FROM:    ${{ inputs.from }}
+          BACKFILL_TO:      ${{ inputs.to }}
+          RETRY_PER_DATE:   ${{ inputs.retry_per_date }}
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/backfill-valuations.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          if grep -Eq '(^|[^0-9])429([^0-9]|$)|Too Many Requests' sync.log; then
+            rate_limited=true
+          else
+            rate_limited=false
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$rate_limited" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RATE_LIMITED: ${{ steps.sync.outputs.rate_limited }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1
+
+  backfill-valuations-scheduled:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: 直近30日 バリュエーション補完
+        id: sync
+        shell: bash
+        env:
+          DATABASE_URL:     ${{ secrets.DATABASE_URL }}
+          JQUANTS_API_KEY:  ${{ secrets.JQUANTS_API_KEY }}
+          BACKFILL_DAYS:    '30'
+          RETRY_PER_DATE:   '3'
+        run: |
+          set +e
+          set -o pipefail
+          npx tsx scripts/backfill-valuations.ts 2>&1 | tee sync.log
+          exit_code=${PIPESTATUS[0]}
+          if grep -Eq '(^|[^0-9])429([^0-9]|$)|Too Many Requests' sync.log; then
+            rate_limited=true
+          else
+            rate_limited=false
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "rate_limited=$rate_limited" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Discord notify
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USERNAME: jquants-metrics
+          JOB_STATUS: ${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}
+          RATE_LIMITED: ${{ steps.sync.outputs.rate_limited }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Fail if sync failed
+        if: ${{ steps.sync.outputs.exit_code != '0' }}
+        run: exit 1

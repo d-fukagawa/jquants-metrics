@@ -346,6 +346,26 @@ a { color: inherit; text-decoration: none; }
 .daily-ranking-table td:nth-child(3) { white-space: normal; min-width: 180px; }
 .daily-ranking-rank { font-weight: 700; }
 .daily-ranking-turnover { font-variant-numeric: tabular-nums; font-weight: 600; }
+.valuation-filter { align-items: end; }
+.valuation-table { min-width: 2100px; }
+.valuation-table td { white-space: nowrap; }
+.valuation-table td:nth-child(3) { white-space: normal; min-width: 180px; }
+.valuation-table td:last-child { min-width: 220px; }
+.valuation-badge,
+.valuation-flag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin: 2px 4px 2px 0;
+  font-size: 11px;
+  font-weight: 600;
+}
+.valuation-badge--strong { background: #dcfce7; color: #166534; }
+.valuation-badge--positive { background: #dbeafe; color: #1e40af; }
+.valuation-badge--warning { background: #ffedd5; color: #9a3412; }
+.valuation-badge--muted { background: var(--muted); color: var(--muted-fg); }
+.valuation-flag { border: 1px solid var(--border); color: var(--foreground); }
+.valuation-flag--warning { border-color: #f59e0b; color: #b45309; }
 
 /* ── Stock Page ── */
 .page-header { margin-bottom: 32px; }

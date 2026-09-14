@@ -8,6 +8,11 @@ export interface SyncStatusSummary {
   priceDateCount: number
   priceLatestDate: string | null
   priceLatestDateCount: number
+  valuationTotalCount: number
+  valuationDateCount: number
+  valuationCodeCount: number
+  valuationLatestDate: string | null
+  valuationLatestDateCount: number
   financialTotalCount: number
   financialCodeCount: number
   financialLatestDiscDate: string | null
@@ -53,6 +58,8 @@ export async function getSyncStatusSummary(db: Db): Promise<SyncStatusSummary> {
     masterRow,
     priceRow,
     priceLatestRow,
+    valuationRow,
+    valuationLatestRow,
     finRow,
     finLatestRow,
     detailsRow,
@@ -80,6 +87,20 @@ export async function getSyncStatusSummary(db: Db): Promise<SyncStatusSummary> {
         COUNT(*)::int AS latest_count
       FROM daily_prices
       WHERE date = (SELECT MAX(date) FROM daily_prices)
+    `),
+    queryRow(db, sql`
+      SELECT
+        COUNT(*)::int AS total_count,
+        COUNT(DISTINCT date)::int AS date_count,
+        COUNT(DISTINCT code)::int AS code_count,
+        MAX(date)::text AS latest_date
+      FROM equity_valuations
+    `),
+    queryRow(db, sql`
+      SELECT
+        COUNT(*)::int AS latest_count
+      FROM equity_valuations
+      WHERE date = (SELECT MAX(date) FROM equity_valuations)
     `),
     queryRow(db, sql`
       SELECT
@@ -229,6 +250,11 @@ export async function getSyncStatusSummary(db: Db): Promise<SyncStatusSummary> {
   const priceDateCount = toNum(priceRow.date_count)
   const priceLatestDate = toText(priceRow.latest_date)
   const priceLatestDateCount = toNum(priceLatestRow.latest_count)
+  const valuationTotalCount = toNum(valuationRow.total_count)
+  const valuationDateCount = toNum(valuationRow.date_count)
+  const valuationCodeCount = toNum(valuationRow.code_count)
+  const valuationLatestDate = toText(valuationRow.latest_date)
+  const valuationLatestDateCount = toNum(valuationLatestRow.latest_count)
   const financialTotalCount = toNum(finRow.total_count)
   const financialCodeCount = toNum(finRow.code_count)
   const financialLatestDiscDate = toText(finRow.latest_disc_date)
@@ -271,6 +297,11 @@ export async function getSyncStatusSummary(db: Db): Promise<SyncStatusSummary> {
     priceDateCount,
     priceLatestDate,
     priceLatestDateCount,
+    valuationTotalCount,
+    valuationDateCount,
+    valuationCodeCount,
+    valuationLatestDate,
+    valuationLatestDateCount,
     financialTotalCount,
     financialCodeCount,
     financialLatestDiscDate,

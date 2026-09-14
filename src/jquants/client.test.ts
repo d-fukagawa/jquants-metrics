@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fetchEquitiesMaster, fetchDailyPrices, fetchFinancialSummary } from './client'
+import {
+  fetchDailyPrices,
+  fetchEquitiesMaster,
+  fetchEquityValuationsByCode,
+  fetchEquityValuationsByDate,
+  fetchFinancialSummary,
+} from './client'
 
 const API_KEY = 'test-key'
 
@@ -80,6 +86,66 @@ describe('fetchDailyPrices', () => {
     mockFetch({ message: 'out of range' }, 400)
     await expect(fetchDailyPrices(API_KEY, '72030', '2020-01-01', '2020-01-31'))
       .rejects.toThrow('JQuants API error 400')
+  })
+})
+
+// ---------- fetchEquityValuations ----------
+describe('fetchEquityValuations', () => {
+  beforeEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const valuation = {
+    Date: '2026-08-26',
+    Code: '72030',
+    EPS: 250.5,
+    FwdEPS: 280.25,
+    BPS: 3100.1,
+    ROE: 0.0812,
+    FwdROE: 0.0904,
+    PER: 12.5,
+    FwdPER: 11.17,
+    PBR: 1.01,
+    MktCap: 4_500_000,
+  }
+
+  it('fetches all pages for a date and forwards pagination_key', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: [valuation],
+        pagination_key: 'next.page',
+      })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: [{ ...valuation, Code: '67580' }],
+      }))))
+
+    const pending = fetchEquityValuationsByDate(API_KEY, '2026-08-26')
+    await vi.runAllTimersAsync()
+    const result = await pending
+
+    expect(result.map(row => row.Code)).toEqual(['72030', '67580'])
+    const urls = vi.mocked(fetch).mock.calls.map(call => String(call[0]))
+    expect(urls[0]).toContain('date=2026-08-26')
+    expect(urls[1]).toContain('pagination_key=next.page')
+  })
+
+  it('fetches a code with an optional date range', async () => {
+    mockFetch({ data: [valuation] })
+
+    const result = await fetchEquityValuationsByCode(
+      API_KEY,
+      '72030',
+      '2026-08-01',
+      '2026-08-26',
+    )
+
+    expect(result).toHaveLength(1)
+    const url = vi.mocked(fetch).mock.calls[0][0] as string
+    expect(url).toContain('code=72030')
+    expect(url).toContain('from=2026-08-01')
+    expect(url).toContain('to=2026-08-26')
   })
 })
 

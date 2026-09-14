@@ -28,6 +28,11 @@ describe('GET /sync-status', () => {
       priceDateCount: 750,
       priceLatestDate: '2026-03-11',
       priceLatestDateCount: 4190,
+      valuationTotalCount: 350000,
+      valuationDateCount: 90,
+      valuationCodeCount: 4180,
+      valuationLatestDate: '2026-03-11',
+      valuationLatestDateCount: 4180,
       financialTotalCount: 820000,
       financialCodeCount: 4160,
       financialLatestDiscDate: '2026-02-14',
@@ -70,6 +75,8 @@ describe('GET /sync-status', () => {
     expect(html).toContain('GitHub Actions')
     expect(html).toContain('actions/workflows/daily-sync.yml')
     expect(html).toContain('actions/workflows/backfill-financials.yml')
+    expect(html).toContain('actions/workflows/valuation-sync.yml')
+    expect(html).toContain('350,000')
   })
 
   it('renders 未同期 when no data', async () => {
@@ -80,6 +87,11 @@ describe('GET /sync-status', () => {
       priceDateCount: 0,
       priceLatestDate: null,
       priceLatestDateCount: 0,
+      valuationTotalCount: 0,
+      valuationDateCount: 0,
+      valuationCodeCount: 0,
+      valuationLatestDate: null,
+      valuationLatestDateCount: 0,
       financialTotalCount: 0,
       financialCodeCount: 0,
       financialLatestDiscDate: null,

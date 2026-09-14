@@ -38,6 +38,24 @@ export const dailyPrices = pgTable('daily_prices', {
   index('idx_daily_prices_date').on(t.date),
 ])
 
+// 日次バリュエーション指標 — /v2/equities/valuation
+export const equityValuations = pgTable('equity_valuations', {
+  code:               varchar('code', { length: 5 }).notNull(),
+  date:               date('date').notNull(),
+  epsTtm:             numeric('eps_ttm'),
+  epsCompanyForecast: numeric('eps_company_forecast'),
+  bps:                numeric('bps'),
+  roeTtm:             numeric('roe_ttm'),
+  roeCompanyForecast: numeric('roe_company_forecast'),
+  perTtm:             numeric('per_ttm'),
+  perCompanyForecast: numeric('per_company_forecast'),
+  pbr:                numeric('pbr'),
+  marketCapMillion:   numeric('market_cap_million'),
+}, (t) => [
+  primaryKey({ columns: [t.code, t.date] }),
+  index('idx_equity_valuations_date').on(t.date),
+])
+
 // 財務情報 — /v2/fins/summary
 export const financialSummary = pgTable('financial_summary', {
   code:        varchar('code', { length: 5 }).notNull(),
