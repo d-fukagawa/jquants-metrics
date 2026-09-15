@@ -15,6 +15,7 @@
  *   DATABASE_URL        ローカル dev branch の Neon 接続文字列 (必須)
  *   NEON_API_KEY        Neon API キー (neonctl が読む / 必須)
  *   NEON_DEV_BRANCH_ID  reset 対象の dev branch ID または名前 (必須)
+ *   NEON_PROJECT_ID     reset 対象の Neon project ID (任意。project-scoped API key では必須)
  *   SYNC_SKIP_RESET     "1" を指定すると branch reset をスキップ (退避と復元のみ)
  */
 
@@ -25,6 +26,7 @@ import { promisify } from 'node:util'
 import { sql } from 'drizzle-orm'
 import { type Db, createDb } from '../src/db/client'
 import { stockMemoMeta, stockMemos, themeStocks, themes } from '../src/db/schema'
+import { buildResetBranchArgs } from './neonctl-args'
 
 const execFileP = promisify(execFile)
 
@@ -32,6 +34,7 @@ const databaseUrl = process.env.DATABASE_URL
 const databaseUrlProd = process.env.DATABASE_URL_PROD
 const neonApiKey = process.env.NEON_API_KEY
 const devBranchId = process.env.NEON_DEV_BRANCH_ID
+const neonProjectId = process.env.NEON_PROJECT_ID
 const skipReset = process.env.SYNC_SKIP_RESET === '1'
 
 if (!databaseUrl || !neonApiKey || !devBranchId) {
@@ -101,7 +104,7 @@ async function pruneOldSnapshots(): Promise<number> {
 }
 
 async function resetDevBranch(branchId: string): Promise<void> {
-  const args = ['neonctl', 'branches', 'reset', branchId, '--parent', '--api-key', neonApiKey!]
+  const args = buildResetBranchArgs(branchId, neonApiKey!, neonProjectId)
   // npx 経由で実行 (devDep として neonctl を入れる前提)
   const { stdout, stderr } = await execFileP('npx', args, {
     env: { ...process.env, NEON_API_KEY: neonApiKey! },

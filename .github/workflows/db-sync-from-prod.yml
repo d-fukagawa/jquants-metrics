@@ -9,6 +9,8 @@ name: DB Sync From Prod (weekly)
 #   NEON_API_KEY        Neon API キー
 #   NEON_DEV_BRANCH_ID  reset 対象の dev branch ID
 #   DISCORD_WEBHOOK_URL 失敗通知用
+# 必要 variables:
+#   NEON_PROJECT_ID     reset 対象の Neon project ID
 
 on:
   schedule:
@@ -38,6 +40,7 @@ jobs:
           DATABASE_URL:       ${{ secrets.DATABASE_URL_DEV }}
           NEON_API_KEY:       ${{ secrets.NEON_API_KEY }}
           NEON_DEV_BRANCH_ID: ${{ secrets.NEON_DEV_BRANCH_ID }}
+          NEON_PROJECT_ID:    ${{ vars.NEON_PROJECT_ID }}
         run: |
           set +e
           set -o pipefail

@@ -15,3 +15,4 @@ EDINET_API_KEY=your_api_key_here3
 # 未使用なら空のままで可。
 NEON_API_KEY=
 NEON_DEV_BRANCH_ID=
+NEON_PROJECT_ID=
