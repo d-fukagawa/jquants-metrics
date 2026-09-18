@@ -146,6 +146,8 @@ describe('POST /api/sync — target: fins_details', () => {
       detailsSource: 'edinet+official',
       taxExpenseFilledCount: 1,
       adjustmentsFilledCount: 3,
+      officialErrorCount: 0,
+      officialWarningCount: 1,
     })
 
     const res = await post({ target: 'fins_details', code: '7203' }, 'secret123')
@@ -154,6 +156,8 @@ describe('POST /api/sync — target: fins_details', () => {
     expect(json.fallback).toBe(true)
     expect(json.synced).toBe(2)
     expect(json.details_source).toBe('edinet+official')
+    expect(json.official_error_count).toBe(0)
+    expect(json.official_warning_count).toBe(1)
   })
 })
 

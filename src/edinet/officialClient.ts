@@ -1,3 +1,5 @@
+import { unzipSync } from 'fflate'
+
 export interface OfficialAdjustmentItem {
   itemKey: string
   amount: string
@@ -8,9 +10,10 @@ export interface OfficialAdjustmentItem {
 export interface OfficialStatementExtract {
   taxExpense: string | null
   adjustments: OfficialAdjustmentItem[]
+  warnings?: string[]
 }
 
-const BASE_URL = 'https://disclosure2dl.edinet-fsa.go.jp/api/v2'
+const BASE_URL = 'https://api.edinet-fsa.go.jp/api/v2'
 
 const ADDBACK_ITEMS = [
   { key: 'Impairment loss', category: 'impairment', keywords: ['impairment loss', '減損損失'] },
@@ -28,144 +31,281 @@ const DEDUCTION_ITEMS = [
   { key: 'Gain on sale of shares of subsidiaries and associates', category: 'gain', keywords: ['gain on sale of shares of subsidiaries and associates', '関係会社株式売却益'] },
 ] as const
 
-const TAX_KEYWORDS = ['income tax expense', 'income taxes', 'tax expense', '法人税等', '法人税、住民税及び事業税']
+const TAX_EXACT_LABELS = new Set([
+  'income tax expense',
+  'income taxes',
+  'tax expense',
+  '法人税等',
+  '法人税等合計',
+])
 
-function normalize(s: string): string {
-  return s.trim().toLowerCase()
+const TAX_FALLBACK_LABELS = new Set([
+  '法人税、住民税及び事業税',
+  '法人税、住民税及び事業税等',
+])
+
+interface OfficialCsvRow {
+  elementId: string
+  label: string
+  contextId: string
+  relativeYear: string
+  basis: string
+  periodKind: string
+  unitId: string
+  unit: string
+  value: string
 }
 
-function parseCsvLine(line: string): string[] {
-  const out: string[] = []
-  let cur = ''
+function normalize(value: string): string {
+  return value.replace(/\uFEFF/g, '').trim().toLowerCase()
+}
+
+function parseDelimited(text: string, delimiter = '\t'): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cell = ''
   let inQuotes = false
 
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
     if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        cur += '"'
+      if (inQuotes && text[i + 1] === '"') {
+        cell += '"'
         i++
       } else {
         inQuotes = !inQuotes
       }
       continue
     }
-    if (ch === ',' && !inQuotes) {
-      out.push(cur)
-      cur = ''
+    if (ch === delimiter && !inQuotes) {
+      row.push(cell)
+      cell = ''
       continue
     }
-    cur += ch
+    if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && text[i + 1] === '\n') i++
+      row.push(cell)
+      if (row.some(value => value.trim() !== '')) rows.push(row)
+      row = []
+      cell = ''
+      continue
+    }
+    cell += ch
   }
-  out.push(cur)
-  return out
-}
 
-function parseCsv(text: string): string[][] {
-  return text
-    .replace(/\uFEFF/g, '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map(parseCsvLine)
+  row.push(cell)
+  if (row.some(value => value.trim() !== '')) rows.push(row)
+  return rows
 }
 
 function parseNumericCell(cell: string): number | null {
-  const normalized = cell.replace(/,/g, '').replace(/\s+/g, '')
-  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null
+  let normalized = cell.replace(/,/g, '').replace(/\s+/g, '').replace(/−/g, '-')
+  let negative = false
+  if (/^[△▲]/.test(normalized)) {
+    negative = true
+    normalized = normalized.slice(1)
+  }
+  if (normalized.startsWith('(') && normalized.endsWith(')')) {
+    negative = true
+    normalized = normalized.slice(1, -1)
+  }
+  if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return null
   const n = Number(normalized)
-  return Number.isFinite(n) ? n : null
+  if (!Number.isFinite(n)) return null
+  return negative ? -Math.abs(n) : n
 }
 
-function pickRowAmount(cells: string[]): number | null {
-  for (let i = cells.length - 1; i >= 0; i--) {
-    const n = parseNumericCell(cells[i] ?? '')
-    if (n !== null) return n
+function decodeOfficialCsv(bytes: Uint8Array): string {
+  const utf16Le = bytes[0] === 0xff && bytes[1] === 0xfe
+    || (bytes.length > 3 && bytes[1] === 0 && bytes[3] === 0)
+  return new TextDecoder(utf16Le ? 'utf-16le' : 'utf-8').decode(bytes)
+}
+
+function headerIndex(headers: string[], aliases: readonly string[]): number {
+  const normalizedAliases = aliases.map(normalize)
+  return headers.findIndex(header => normalizedAliases.includes(normalize(header)))
+}
+
+function parseOfficialCsv(bytes: Uint8Array): OfficialCsvRow[] {
+  const parsed = parseDelimited(decodeOfficialCsv(bytes))
+  const headers = parsed[0]
+  if (!headers) return []
+
+  const indexes = {
+    elementId: headerIndex(headers, ['要素ID', 'Element ID']),
+    label: headerIndex(headers, ['項目名', 'Item Name']),
+    contextId: headerIndex(headers, ['コンテキストID', 'Context ID']),
+    relativeYear: headerIndex(headers, ['相対年度', 'Relative Year']),
+    basis: headerIndex(headers, ['連結・個別', 'Consolidated or NonConsolidated']),
+    periodKind: headerIndex(headers, ['期間・時点', 'Period or Instant']),
+    unitId: headerIndex(headers, ['ユニットID', 'Unit ID']),
+    unit: headerIndex(headers, ['単位', 'Unit']),
+    value: headerIndex(headers, ['値', 'Value']),
   }
+
+  if (indexes.elementId < 0 || indexes.label < 0 || indexes.contextId < 0 || indexes.value < 0) {
+    throw new Error('EDINET Official CSV has an unsupported header layout')
+  }
+
+  const cell = (row: string[], index: number) => index < 0 ? '' : (row[index] ?? '')
+  return parsed.slice(1).map(row => ({
+    elementId: cell(row, indexes.elementId),
+    label: cell(row, indexes.label),
+    contextId: cell(row, indexes.contextId),
+    relativeYear: cell(row, indexes.relativeYear),
+    basis: cell(row, indexes.basis),
+    periodKind: cell(row, indexes.periodKind),
+    unitId: cell(row, indexes.unitId),
+    unit: cell(row, indexes.unit),
+    value: cell(row, indexes.value),
+  }))
+}
+
+function isCurrentConsolidatedDuration(row: OfficialCsvRow): boolean {
+  const context = normalize(row.contextId)
+  const relativeYear = normalize(row.relativeYear)
+  const basis = normalize(row.basis)
+  const periodKind = normalize(row.periodKind)
+  const unit = normalize(`${row.unitId} ${row.unit}`)
+
+  const isCurrent = context.includes('currentyearduration')
+    || relativeYear === '当期'
+    || relativeYear === 'current year'
+  const isDuration = context.includes('duration')
+    || periodKind === '期間'
+    || periodKind === 'duration'
+  const isNonConsolidated = context.includes('nonconsolidated') || basis === '個別'
+  const isDimensional = context.includes('member') && !context.includes('nonconsolidatedmember')
+  const isConsolidated = basis === '連結'
+    || (!basis && !isNonConsolidated && !isDimensional)
+  const isMoney = !unit || unit.includes('jpy') || unit.includes('円')
+
+  return isCurrent && isDuration && !isNonConsolidated && !isDimensional && isConsolidated && isMoney
+}
+
+function matchesAny(value: string, keywords: readonly string[]): boolean {
+  const normalized = normalize(value)
+  return keywords.some(keyword => normalized.includes(normalize(keyword)))
+}
+
+function uniqueAmount(
+  rows: OfficialCsvRow[],
+  matcher: (row: OfficialCsvRow) => boolean,
+  warningKey: string,
+  warnings: string[],
+): number | null {
+  const amounts = new Set<number>()
+  for (const row of rows) {
+    if (!isCurrentConsolidatedDuration(row) || !matcher(row)) continue
+    const amount = parseNumericCell(row.value)
+    if (amount !== null && amount !== 0) amounts.add(amount)
+  }
+  if (amounts.size === 1) return [...amounts][0] ?? null
+  if (amounts.size > 1) warnings.push(`ambiguous:${warningKey}`)
   return null
 }
 
-function matchesAny(text: string, keywords: readonly string[]): boolean {
-  const t = normalize(text)
-  return keywords.some((k) => t.includes(normalize(k)))
-}
-
-function toAmountString(n: number): string {
-  return String(Math.abs(n))
-}
-
-async function fetchOfficialStatementCsv(apiKey: string, docId: string): Promise<string> {
-  const url = new URL(`${BASE_URL}/documents/${encodeURIComponent(docId)}`)
-  // EDINET API v2: type=5 は CSV（財務諸表）取得。
-  url.searchParams.set('type', '5')
-
-  const res = await fetch(url.toString(), {
-    headers: {
-      'Ocp-Apim-Subscription-Key': apiKey,
+function mainStatementFiles(zipBytes: Uint8Array): Uint8Array[] {
+  const files = unzipSync(zipBytes, {
+    filter: file => {
+      const name = file.name.replace(/\\/g, '/')
+      const baseName = name.split('/').pop() ?? ''
+      return /(^|\/)XBRL_TO_CSV\//i.test(name)
+        && /^jpcrp.*\.csv$/i.test(baseName)
     },
   })
+  return Object.entries(files)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, bytes]) => bytes)
+}
 
+export function extractOfficialTaxAndAdjustmentsFromZip(zipBytes: Uint8Array): OfficialStatementExtract {
+  if (zipBytes[0] !== 0x50 || zipBytes[1] !== 0x4b) {
+    throw new Error('EDINET Official API returned a non-ZIP response')
+  }
+
+  const csvFiles = mainStatementFiles(zipBytes)
+  if (csvFiles.length === 0) {
+    throw new Error('EDINET Official ZIP does not contain XBRL_TO_CSV/jpcrp*.csv')
+  }
+
+  const rows = csvFiles.flatMap(parseOfficialCsv)
+  const warnings: string[] = []
+  const taxExpense = uniqueAmount(rows, row => {
+    const label = normalize(row.label)
+    const element = normalize(row.elementId)
+    return TAX_EXACT_LABELS.has(label)
+      || element.endsWith(':incometaxexpense')
+      || element.endsWith(':incometaxes')
+  }, 'tax_expense', warnings) ?? uniqueAmount(
+    rows,
+    row => TAX_FALLBACK_LABELS.has(normalize(row.label)),
+    'tax_expense_fallback',
+    warnings,
+  )
+
+  const adjustments: OfficialAdjustmentItem[] = []
+  for (const item of ADDBACK_ITEMS) {
+    const amount = uniqueAmount(
+      rows,
+      row => matchesAny(`${row.elementId} ${row.label}`, item.keywords),
+      item.key,
+      warnings,
+    )
+    if (amount !== null) {
+      adjustments.push({
+        itemKey: item.key,
+        amount: String(Math.abs(amount)),
+        direction: 'addback',
+        category: item.category,
+      })
+    }
+  }
+  for (const item of DEDUCTION_ITEMS) {
+    const amount = uniqueAmount(
+      rows,
+      row => matchesAny(`${row.elementId} ${row.label}`, item.keywords),
+      item.key,
+      warnings,
+    )
+    if (amount !== null) {
+      adjustments.push({
+        itemKey: item.key,
+        amount: String(Math.abs(amount)),
+        direction: 'deduction',
+        category: item.category,
+      })
+    }
+  }
+
+  return {
+    taxExpense: taxExpense === null ? null : String(taxExpense),
+    adjustments,
+    warnings,
+  }
+}
+
+async function fetchOfficialStatementZip(apiKey: string, docId: string): Promise<Uint8Array> {
+  const url = new URL(`${BASE_URL}/documents/${encodeURIComponent(docId)}`)
+  url.searchParams.set('type', '5')
+  url.searchParams.set('Subscription-Key', apiKey)
+
+  const res = await fetch(url.toString())
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`EDINET Official API error ${res.status}: ${text}`)
   }
 
-  return res.text()
+  const contentType = res.headers.get('content-type')?.toLowerCase() ?? ''
+  const body = new Uint8Array(await res.arrayBuffer())
+  if (contentType.includes('json') || body[0] !== 0x50 || body[1] !== 0x4b) {
+    const text = new TextDecoder().decode(body).slice(0, 500)
+    throw new Error(`EDINET Official API returned a non-ZIP response: ${text}`)
+  }
+  return body
 }
 
 export async function fetchOfficialTaxAndAdjustments(apiKey: string, docId: string): Promise<OfficialStatementExtract> {
-  const csv = await fetchOfficialStatementCsv(apiKey, docId)
-  const rows = parseCsv(csv)
-
-  let taxExpense: string | null = null
-  const addbackMap = new Map<string, { category: string; amount: number }>()
-  const deductionMap = new Map<string, { category: string; amount: number }>()
-
-  for (const cells of rows) {
-    const joined = cells.join(' | ')
-    const amount = pickRowAmount(cells)
-    if (amount === null || amount === 0) continue
-
-    if (taxExpense === null && matchesAny(joined, TAX_KEYWORDS)) {
-      taxExpense = String(amount)
-    }
-
-    for (const item of ADDBACK_ITEMS) {
-      if (!matchesAny(joined, item.keywords)) continue
-      const prev = addbackMap.get(item.key)
-      addbackMap.set(item.key, {
-        category: item.category,
-        amount: (prev?.amount ?? 0) + Math.abs(amount),
-      })
-    }
-
-    for (const item of DEDUCTION_ITEMS) {
-      if (!matchesAny(joined, item.keywords)) continue
-      const prev = deductionMap.get(item.key)
-      deductionMap.set(item.key, {
-        category: item.category,
-        amount: (prev?.amount ?? 0) + Math.abs(amount),
-      })
-    }
-  }
-
-  const adjustments: OfficialAdjustmentItem[] = []
-  for (const [itemKey, v] of addbackMap.entries()) {
-    adjustments.push({
-      itemKey,
-      amount: toAmountString(v.amount),
-      direction: 'addback',
-      category: v.category,
-    })
-  }
-  for (const [itemKey, v] of deductionMap.entries()) {
-    adjustments.push({
-      itemKey,
-      amount: toAmountString(v.amount),
-      direction: 'deduction',
-      category: v.category,
-    })
-  }
-
-  return { taxExpense, adjustments }
+  const zip = await fetchOfficialStatementZip(apiKey, docId)
+  return extractOfficialTaxAndAdjustmentsFromZip(zip)
 }

@@ -5,13 +5,19 @@ import type { Db } from '../db/client'
 // ---------- テストフィクスチャ ----------
 const BASE_FY = {
   code: '72030', discNo: '123', discDate: '2025-03-01',
+  discTime: null,
   docType: 'fy', curPerType: 'FY',
+  curPerStart: null, curPerEnd: null, curFyStart: null, curFyEnd: null,
   sales: '45000000000000', op: '5000000000000', np: '4000000000000',
   eps: '375.4', bps: '3108',
   equity: '26100000000000', eqAr: '0.275', totalAssets: '94800000000000',
-  cfo: '4210000000000', cashEq: '8430000000000',
+  cfo: '4210000000000', cfi: null, cff: null, cashEq: '8430000000000',
   shOutFy: '13148000000', trShFy: '1000000000',
   divAnn: '107', fSales: null, fOp: null, fNp: null, fEps: null, fDivAnn: null,
+  retroRestatement: null,
+  changedByAsRevision: null,
+  changedOtherThanAsRevision: null,
+  changedAccountingEstimate: null,
 }
 
 const BASE_DETAIL = {

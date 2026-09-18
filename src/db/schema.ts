@@ -61,8 +61,13 @@ export const financialSummary = pgTable('financial_summary', {
   code:        varchar('code', { length: 5 }).notNull(),
   discNo:      text('disc_no').notNull(),       // 開示番号 (DisclosureNumber)
   discDate:    date('disc_date'),
+  discTime:    text('disc_time'),
   docType:     text('doc_type'),                // DocType
   curPerType:  text('cur_per_type'),            // 1Q/2Q/3Q/4Q/FY
+  curPerStart: date('cur_per_start'),
+  curPerEnd:   date('cur_per_end'),
+  curFyStart:  date('cur_fy_start'),
+  curFyEnd:    date('cur_fy_end'),
   sales:       numeric('sales'),
   op:          numeric('op'),                   // 営業利益
   np:          numeric('np'),                   // 当期純利益
@@ -72,6 +77,8 @@ export const financialSummary = pgTable('financial_summary', {
   eqAr:        numeric('eq_ar'),                // 自己資本比率 (小数)
   totalAssets: numeric('total_assets'),
   cfo:         numeric('cfo'),                  // 営業CF
+  cfi:         numeric('cfi'),                  // 投資CF
+  cff:         numeric('cff'),                  // 財務CF
   cashEq:      numeric('cash_eq'),
   shOutFy:     numeric('sh_out_fy'),            // 発行済株式数
   trShFy:      numeric('tr_sh_fy'),             // 自己株式数
@@ -81,6 +88,10 @@ export const financialSummary = pgTable('financial_summary', {
   fNp:         numeric('f_np'),                 // 予想当期純利益
   fEps:        numeric('f_eps'),                // 予想EPS
   fDivAnn:     numeric('f_div_ann'),            // 年間配当予想
+  retroRestatement: boolean('retro_restatement'),
+  changedByAsRevision: boolean('changed_by_as_revision'),
+  changedOtherThanAsRevision: boolean('changed_other_than_as_revision'),
+  changedAccountingEstimate: boolean('changed_accounting_estimate'),
 }, (t) => [
   primaryKey({ columns: [t.code, t.discNo] }),
 ])
@@ -175,9 +186,14 @@ export const edinetBridgeFacts = pgTable('edinet_bridge_facts', {
   pretaxProfit:    numeric('pretax_profit'),
   netProfit:       numeric('net_profit'),
   cfo:             numeric('cfo'),
+  cfi:             numeric('cfi'),
+  capex:           numeric('capex'),
   depreciation:    numeric('depreciation'),
+  accountingStandard: text('accounting_standard'),
+  basis:           text('basis'),
   adjustmentItemsJson: jsonb('adjustment_items_json'),
   disclosedAt:     date('disclosed_at'),
+  submittedAt:     timestamp('submitted_at', { withTimezone: true }),
   sourceDocId:     text('source_doc_id'),
   updatedAt:       timestamp('updated_at', { withTimezone: true }).notNull(),
 }, (t) => [

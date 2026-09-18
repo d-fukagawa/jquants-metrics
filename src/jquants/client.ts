@@ -135,6 +135,14 @@ export async function fetchFinancialSummary(
   return data.data
 }
 
+// 財務情報を開示日単位で全銘柄取得する
+export async function fetchFinancialSummaryByDate(
+  apiKey: string,
+  date: string,
+): Promise<FinancialSummary[]> {
+  return getPaginated<FinancialSummary>(apiKey, '/fins/summary', { date })
+}
+
 // 詳細財務情報を取得する（XBRL ベース）
 // code: 5桁 (例: "72030")
 export async function fetchFinsDetails(

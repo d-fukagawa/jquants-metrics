@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { syncStockMaster, syncDailyPrices, syncFinancialSummary, syncFinsDetails, syncFinsDetailsFromEdinet } from './syncService'
+import { syncStockMaster, syncDailyPrices, syncFinancialSummary, syncFinancialSummaryByDate, syncFinsDetails, syncFinsDetailsFromEdinet } from './syncService'
 import * as jquants from '../jquants/client'
 import * as edinet from '../edinet/client'
 import * as officialEdinet from '../edinet/officialClient'
@@ -127,14 +127,18 @@ describe('syncFinancialSummary', () => {
 
   const summary = {
     DiscNo: '20240801123456', DiscDate: '2024-08-01',
+    DiscTime: '15:00:00',
     Code: '72030', DocType: '2QFinancialStatements_Consolidated_IFRS', CurPerType: '2Q',
+    CurPerSt: '2024-04-01', CurPerEn: '2024-09-30',
+    CurFYSt: '2024-04-01', CurFYEn: '2025-03-31',
     Sales: '24630753000000', OP: '2005692000000', NP: '1773426000000',
     EPS: '136.07', BPS: '',   // IFRS中間 — 空文字
     Eq: '38456954000000', EqAR: '0.384', TA: '100000000000000',
-    CFO: '2944609000000', CashEq: '8112922000000',
+    CFO: '2944609000000', CFI: '-1200000000000', CFF: '-500000000000', CashEq: '8112922000000',
     ShOutFY: '15794987460', TrShFY: '2761598241', AvgSh: '13033161110',
     DivAnn: '30', FDivAnn: '35',
     FSales: '45000000000000', FOP: '4500000000000', FNP: '3500000000000', FEPS: '268.0',
+    RetroRst: 'true', ChgByASRev: 'false', ChgNoASRev: '', ChgAcEst: 'false',
   }
 
   it('returns number of synced records', async () => {
@@ -162,6 +166,31 @@ describe('syncFinancialSummary', () => {
     expect(row.eps).toBe('136.07')
     expect(row.eqAr).toBe('0.384')
     expect(row.cfo).toBe('2944609000000')
+    expect(row.cfi).toBe('-1200000000000')
+    expect(row.cff).toBe('-500000000000')
+    expect(row.discTime).toBe('15:00:00')
+    expect(row.curPerStart).toBe('2024-04-01')
+    expect(row.curPerEnd).toBe('2024-09-30')
+    expect(row.curFyStart).toBe('2024-04-01')
+    expect(row.curFyEnd).toBe('2025-03-31')
+    expect(row.retroRestatement).toBe(true)
+    expect(row.changedByAsRevision).toBe(false)
+    expect(row.changedOtherThanAsRevision).toBeNull()
+  })
+
+  it('updates the added source fields on conflict', async () => {
+    vi.mocked(jquants.fetchFinancialSummary).mockResolvedValue([summary])
+    const { db, onConflictDoUpdate } = makeMockDb()
+    await syncFinancialSummary(db, API_KEY, '72030')
+    const options = onConflictDoUpdate.mock.calls[0][0]
+    expect(options.set).toEqual(expect.objectContaining({
+      discTime: expect.anything(),
+      curPerStart: expect.anything(),
+      curPerEnd: expect.anything(),
+      cfi: expect.anything(),
+      cff: expect.anything(),
+      retroRestatement: expect.anything(),
+    }))
   })
 
   it('returns 0 when API returns empty array', async () => {
@@ -170,6 +199,33 @@ describe('syncFinancialSummary', () => {
     const count = await syncFinancialSummary(db, API_KEY, '72030')
     expect(count).toBe(0)
     expect(insert).not.toHaveBeenCalled()
+  })
+})
+
+describe('syncFinancialSummaryByDate', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('stores all rows returned for a disclosure date', async () => {
+    vi.mocked(jquants.fetchFinancialSummaryByDate).mockResolvedValue([{
+      DiscNo: '20260914000001', DiscDate: '2026-09-14', DiscTime: '15:00:00',
+      Code: '72030', DocType: '2QFinancialStatements_Consolidated_JP', CurPerType: '2Q',
+      CurPerSt: '2026-04-01', CurPerEn: '2026-09-30', CurFYSt: '2026-04-01', CurFYEn: '2027-03-31',
+      Sales: '100', OP: '10', NP: '8', EPS: '1', BPS: '10', Eq: '50', EqAR: '0.5', TA: '100',
+      CFO: '12', CFI: '-5', CFF: '-2', CashEq: '20', ShOutFY: '100', TrShFY: '0', AvgSh: '100',
+      DivAnn: '1', FDivAnn: '1', FSales: '200', FOP: '20', FNP: '16', FEPS: '2',
+      RetroRst: 'false', ChgByASRev: 'false', ChgNoASRev: 'false', ChgAcEst: 'false',
+    }])
+    const { db, values } = makeMockDb()
+
+    const count = await syncFinancialSummaryByDate(db, API_KEY, '2026-09-14')
+
+    expect(count).toBe(1)
+    expect(jquants.fetchFinancialSummaryByDate).toHaveBeenCalledWith(API_KEY, '2026-09-14')
+    expect(values.mock.calls[0][0][0]).toEqual(expect.objectContaining({
+      code: '72030',
+      cfi: '-5',
+      curPerStart: '2026-04-01',
+    }))
   })
 })
 
@@ -263,6 +319,8 @@ describe('syncFinsDetailsFromEdinet', () => {
     expect(out.detailsSource).toBe('edinet+official')
     expect(out.taxExpenseFilledCount).toBe(1)
     expect(out.adjustmentsFilledCount).toBe(1)
+    expect(out.officialErrorCount).toBe(0)
+    expect(out.officialWarningCount).toBe(0)
 
     const detailsRows = values.mock.calls[0][0]
     expect(detailsRows[0].discNo).toBe('EDINET:2026-03')
@@ -284,5 +342,23 @@ describe('syncFinsDetailsFromEdinet', () => {
     expect(out.detailsSource).toBe('edinetdb')
     expect(out.taxExpenseFilledCount).toBe(0)
     expect(out.adjustmentsFilledCount).toBe(0)
+    expect(out.officialErrorCount).toBe(0)
+  })
+
+  it('counts an official API failure while preserving EDINET DB rows', async () => {
+    vi.mocked(edinet.searchCompanyByCode).mockResolvedValue([
+      { edinetCode: 'E00001', code: '7203' },
+    ] as any)
+    vi.mocked(edinet.fetchCompanyBridgeFacts).mockResolvedValue([
+      { fiscalYear: '2026-03', periodType: 'FY', depreciation: '1', sourceDocId: 'S100ERR' },
+    ] as any)
+    vi.mocked(officialEdinet.fetchOfficialTaxAndAdjustments).mockRejectedValue(new Error('ZIP unavailable'))
+
+    const { db } = makeMockDb()
+    const out = await syncFinsDetailsFromEdinet(db, 'edinetdb-key', 'official-key', '72030')
+
+    expect(out.synced).toBe(1)
+    expect(out.detailsSource).toBe('edinetdb')
+    expect(out.officialErrorCount).toBe(1)
   })
 })

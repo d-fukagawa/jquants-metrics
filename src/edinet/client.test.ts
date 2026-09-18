@@ -60,12 +60,18 @@ describe('edinet client', () => {
     expect(rows).toEqual([])
   })
 
-  it('fetchCompanyBridgeFacts parses financial rows', async () => {
+  it('fetchCompanyBridgeFacts parses the current annual financial schema', async () => {
     mockFetch({
       data: [{
-        fiscalYear: '2026-03',
-        periodType: 'FY',
-        operatingProfit: '100',
+        fiscal_year: '2026-03',
+        operating_income: '100',
+        cf_operating: '80',
+        cf_investing: '-30',
+        capex: '20',
+        accounting_standard: 'ifrs',
+        basis: 'consolidated',
+        submit_date: '2026-06-18 15:30',
+        doc_id: 'S100TEST',
         ibd_current: '50',
         long_term_borrowings: '120',
       }],
@@ -74,6 +80,46 @@ describe('edinet client', () => {
     expect(rows[0].fiscalYear).toBe('2026-03')
     expect(rows[0].debtCurrent).toBe('50')
     expect(rows[0].debtNonCurr).toBe('120')
+    expect(rows[0].operatingProfit).toBe('100')
+    expect(rows[0].cfo).toBe('80')
+    expect(rows[0].cfi).toBe('-30')
+    expect(rows[0].capex).toBe('20')
+    expect(rows[0].accountingStandard).toBe('ifrs')
+    expect(rows[0].basis).toBe('consolidated')
+    expect(rows[0].submittedAt).toBe('2026-06-18T06:30:00.000Z')
+    expect(rows[0].sourceDocId).toBe('S100TEST')
+    const requested = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(requested.searchParams.get('period')).toBe('annual')
+    expect(requested.searchParams.get('years')).toBe('6')
+    expect(requested.searchParams.get('include_nulls')).toBe('true')
+  })
+
+  it('keeps compatibility with legacy camelCase bridge fields', async () => {
+    mockFetch({
+      data: [{
+        fiscalYear: '2025-03',
+        periodType: 'FY',
+        operatingProfit: '90',
+        cashflowOperating: '70',
+        cashflowInvesting: '-20',
+        accountingStandard: 'JP',
+        submittedAt: '2025-06-20T06:00:00.000Z',
+        sourceDocId: 'S100LEGACY',
+      }],
+    })
+
+    const rows = await fetchCompanyBridgeFacts(API_KEY, 'E00001')
+
+    expect(rows[0]).toEqual(expect.objectContaining({
+      fiscalYear: '2025-03',
+      periodType: 'FY',
+      operatingProfit: '90',
+      cfo: '70',
+      cfi: '-20',
+      accountingStandard: 'JP',
+      submittedAt: '2025-06-20T06:00:00.000Z',
+      sourceDocId: 'S100LEGACY',
+    }))
   })
 
   it('fetchQualityScore returns score object', async () => {

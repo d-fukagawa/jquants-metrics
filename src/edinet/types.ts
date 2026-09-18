@@ -39,10 +39,15 @@ export interface EdinetBridgeFact {
   taxExpense?: string | null
   netProfit?: string | null
   cfo?: string | null
+  cfi?: string | null
+  capex?: string | null
   depreciation?: string | null
+  accountingStandard?: string | null
+  basis?: string | null
   debtCurrent?: string | null
   debtNonCurr?: string | null
   disclosedAt?: string | null
+  submittedAt?: string | null
   sourceDocId?: string | null
   adjustmentItems?: Record<string, unknown> | null
 }

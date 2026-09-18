@@ -79,9 +79,24 @@ describe('edinetSyncService', () => {
     vi.mocked(fetchCompanyBridgeFacts).mockResolvedValue([{
       fiscalYear: '2026-03',
       periodType: 'FY',
+      cfi: '-30',
+      capex: '20',
+      accountingStandard: 'ifrs',
+      basis: 'consolidated',
+      submittedAt: '2026-06-18T06:30:00.000Z',
     }] as any)
     const n = await syncEdinetBridge(db, 'k', '72030')
     expect(n).toBe(1)
+    const bridgeInsert = db.insert.mock.results[1].value.values
+    expect(bridgeInsert).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        cfi: '-30',
+        capex: '20',
+        accountingStandard: 'ifrs',
+        basis: 'consolidated',
+        submittedAt: new Date('2026-06-18T06:30:00.000Z'),
+      }),
+    ]))
   })
 
   it('syncEdinetQualityScores upserts score row', async () => {

@@ -70,6 +70,16 @@ function toDateOrNull(v: unknown): string | null {
   return null
 }
 
+function toDateTimeOrNull(v: unknown): string | null {
+  const s = toStr(v)
+  if (!s) return null
+  const normalized = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?$/.test(s)
+    ? `${s.replace(' ', 'T')}+09:00`
+    : s
+  const d = new Date(normalized)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
 function firstNonEmpty(obj: Record<string, unknown>, keys: readonly string[]): string | null {
   for (const key of keys) {
     const s = toStr(obj[key])
@@ -145,7 +155,11 @@ export async function fetchCompanyForecasts(apiKey: string, edinetCode: string):
 }
 
 export async function fetchCompanyBridgeFacts(apiKey: string, edinetCode: string): Promise<EdinetBridgeFact[]> {
-  const raw = await getJson(apiKey, `/companies/${edinetCode}/financials`)
+  const raw = await getJson(apiKey, `/companies/${edinetCode}/financials`, {
+    period: 'annual',
+    years: '6',
+    include_nulls: 'true',
+  })
   const rows = pickArray(raw)
   return rows.map((r: Record<string, unknown>) => {
     const debtCurrent = firstNonEmpty(r, [
@@ -176,21 +190,28 @@ export async function fetchCompanyBridgeFacts(apiKey: string, edinetCode: string
       'convertible_bonds',
     ])
 
+    const submittedAt = toDateTimeOrNull(r.submittedAt ?? r.submitted_at ?? r.submitDate ?? r.submit_date)
+
     return {
       edinetCode,
       code: toStr(r.code ?? r.localCode ?? r.LocalCode),
       fiscalYear: toStr(r.fiscalYear ?? r.fiscal_year ?? r.periodEnd) ?? '',
       periodType: toStr(r.periodType ?? r.period_type ?? r.period) ?? 'FY',
-      operatingProfit: toStr(r.operatingProfit ?? r.op ?? r.operating_profit ?? r.ordinary_income),
+      operatingProfit: toStr(r.operatingProfit ?? r.op ?? r.operating_profit ?? r.operating_income ?? r.ordinary_income),
       pretaxProfit: toStr(r.pretaxProfit ?? r.pretax_profit ?? r.profit_before_tax),
       taxExpense: toStr(r.taxExpense ?? r.tax_expense ?? r.income_tax_expense ?? r.income_taxes),
       netProfit: toStr(r.netProfit ?? r.np ?? r.net_profit ?? r.net_income),
       cfo: toStr(r.cfo ?? r.cashflowOperating ?? r.operating_cf ?? r.cf_operating),
+      cfi: toStr(r.cfi ?? r.cashflowInvesting ?? r.investing_cf ?? r.cf_investing),
+      capex: toStr(r.capex ?? r.capital_expenditure),
       depreciation: toStr(r.depreciation ?? r.dna ?? r.depreciation_and_amortization),
+      accountingStandard: toStr(r.accountingStandard ?? r.accounting_standard),
+      basis: toStr(r.basis),
       debtCurrent,
       debtNonCurr,
-      disclosedAt: toDateOrNull(r.disclosedAt ?? r.disclosed_at ?? r.filingDate ?? r.fiscal_year),
-      sourceDocId: toStr(r.sourceDocId ?? r.source_doc_id ?? r.docId),
+      disclosedAt: toDateOrNull(r.disclosedAt ?? r.disclosed_at ?? r.filingDate ?? r.filing_date ?? r.submit_date ?? r.fiscal_year),
+      submittedAt,
+      sourceDocId: toStr(r.sourceDocId ?? r.source_doc_id ?? r.docId ?? r.doc_id),
       adjustmentItems: (r.adjustmentItems ?? r.adjustment_items ?? null) as Record<string, unknown> | null,
     }
   }).filter(r => r.fiscalYear)

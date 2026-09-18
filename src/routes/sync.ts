@@ -108,6 +108,8 @@ syncRoute.post('/', async (c) => {
                 details_source: fallback.detailsSource,
                 tax_expense_filled_count: fallback.taxExpenseFilledCount,
                 adjustments_filled_count: fallback.adjustmentsFilledCount,
+                official_error_count: fallback.officialErrorCount ?? 0,
+                official_warning_count: fallback.officialWarningCount ?? 0,
               })
             }
             return c.json({

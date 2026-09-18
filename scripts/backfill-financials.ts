@@ -16,6 +16,8 @@
  *   INCLUDE_DETAILS      true のとき fins_details も同期（省略時: true）
  *   EDINET_FALLBACK_ON_403  true のとき 403 後にEDINET補完へ切替（省略時: true）
  *   RATE_LIMIT_PER_MIN 契約プランの上限 req/min（省略時: 60）
+ *   TARGET_CODES       5桁コードのカンマ区切り。省略時は全銘柄
+ *   CONTINUE_ON_ERROR  true のとき銘柄単位のsummary失敗を記録して継続（省略時: false）
  */
 
 import { createDb } from '../src/db/client'
@@ -41,6 +43,17 @@ const shards = Math.max(1, Number(process.env.SHARDS ?? '1') || 1)
 const shard = Math.min(shards - 1, Math.max(0, Number(process.env.SHARD ?? '0') || 0))
 let includeDetails = (process.env.INCLUDE_DETAILS ?? 'true').toLowerCase() === 'true'
 const fallbackOn403 = (process.env.EDINET_FALLBACK_ON_403 ?? 'true').toLowerCase() === 'true'
+const continueOnError = (process.env.CONTINUE_ON_ERROR ?? 'false').toLowerCase() === 'true'
+const requestedCodes = (process.env.TARGET_CODES ?? '')
+  .split(',')
+  .map(code => code.trim().toUpperCase())
+  .filter(Boolean)
+const invalidCodes = requestedCodes.filter(code => !/^[0-9A-Z]{5}$/.test(code))
+if (invalidCodes.length > 0) {
+  console.error(`ERROR: TARGET_CODES must contain 5-character codes: ${invalidCodes.join(',')}`)
+  process.exit(1)
+}
+const targetCodeSet = new Set(requestedCodes)
 if (includeDetails && (!edinetDbApiKey || !edinetApiKey)) {
   console.error('ERROR: EDINETDB_API_KEY and EDINET_API_KEY are required when INCLUDE_DETAILS=true')
   process.exit(1)
@@ -69,7 +82,16 @@ async function withRetry<T>(fn: () => Promise<T>, retries: number): Promise<T> {
 
 const db = createDb(databaseUrl)
 const stocks = await db.select({ code: stockMaster.code }).from(stockMaster)
-const target = stocks.filter((_, i) => i % shards === shard)
+const availableCodeSet = new Set(stocks.map(stock => stock.code))
+const missingCodes = requestedCodes.filter(code => !availableCodeSet.has(code))
+if (missingCodes.length > 0) {
+  console.error(`ERROR: TARGET_CODES not found in stock_master: ${missingCodes.join(',')}`)
+  process.exit(1)
+}
+const selectedStocks = targetCodeSet.size > 0
+  ? stocks.filter(stock => targetCodeSet.has(stock.code))
+  : stocks
+const target = selectedStocks.filter((_, i) => i % shards === shard)
 
 console.log(
   `[fin-backfill] start shard=${shard}/${shards} target=${target.length} total=${stocks.length} sleepMs=${sleepMs} rateLimitPerMin=${rateLimitPerMin} retry=${retryPerCode} includeDetails=${includeDetails} fallbackOn403=${fallbackOn403}`,
@@ -79,6 +101,9 @@ let finCount = 0
 let detailsCount = 0
 let taxExpenseFilledCount = 0
 let adjustmentsFilledCount = 0
+let officialErrorCount = 0
+let officialWarningCount = 0
+const failedCodes: string[] = []
 let done = 0
 let detailsMode: 'jquants' | 'edinet' = 'jquants'
 const detailsSources: Record<DetailsSource, number> = {
@@ -88,7 +113,18 @@ const detailsSources: Record<DetailsSource, number> = {
 }
 
 for (const { code } of target) {
-  const nFin = await withRetry(() => syncFinancialSummary(db, apiKey, code), retryPerCode)
+  let nFin: number
+  try {
+    nFin = await withRetry(() => syncFinancialSummary(db, apiKey, code), retryPerCode)
+  } catch (error) {
+    if (!continueOnError) throw error
+    const message = error instanceof Error ? error.message : String(error)
+    failedCodes.push(code)
+    done++
+    console.error(`[fin-backfill] summary failed code=${code} reason=${message}`)
+    await sleep(sleepMs)
+    continue
+  }
   finCount += nFin
   await sleep(sleepMs)
 
@@ -121,6 +157,8 @@ for (const { code } of target) {
       detailsCount += out.synced
       taxExpenseFilledCount += out.taxExpenseFilledCount
       adjustmentsFilledCount += out.adjustmentsFilledCount
+      officialErrorCount += out.officialErrorCount ?? 0
+      officialWarningCount += out.officialWarningCount ?? 0
       if (out.synced > 0) detailsSources[out.detailsSource] += out.synced
     }
 
@@ -131,7 +169,8 @@ for (const { code } of target) {
   if (done % 50 === 0 || done === target.length) {
     console.log(
       `[fin-backfill] progress ${done}/${target.length} code=${code} mode=${detailsMode} fins=${finCount} details=${detailsCount}` +
-      ` source=${JSON.stringify(detailsSources)} taxFilled=${taxExpenseFilledCount} adjustmentsFilled=${adjustmentsFilledCount}`,
+      ` source=${JSON.stringify(detailsSources)} taxFilled=${taxExpenseFilledCount} adjustmentsFilled=${adjustmentsFilledCount}` +
+      ` officialErrors=${officialErrorCount} officialWarnings=${officialWarningCount}`,
     )
   }
 }
@@ -146,5 +185,11 @@ const summaryDetailsSource: DetailsSource =
 console.log(
   `[fin-backfill] done shard=${shard}/${shards} processed=${done} finRows=${finCount} detailRows=${detailsCount}` +
   ` includeDetails=${includeDetails} details_mode=${detailsMode} details_source=${summaryDetailsSource}` +
-  ` tax_expense_filled_count=${taxExpenseFilledCount} adjustments_filled_count=${adjustmentsFilledCount}`,
+  ` tax_expense_filled_count=${taxExpenseFilledCount} adjustments_filled_count=${adjustmentsFilledCount}` +
+  ` official_error_count=${officialErrorCount} official_warning_count=${officialWarningCount}` +
+  ` failed_count=${failedCodes.length}`,
 )
+if (failedCodes.length > 0) {
+  console.error(`[fin-backfill] failed_codes=${failedCodes.join(',')}`)
+  process.exitCode = 1
+}

@@ -5,6 +5,7 @@ import {
   fetchEquityValuationsByCode,
   fetchEquityValuationsByDate,
   fetchFinancialSummary,
+  fetchFinancialSummaryByDate,
 } from './client'
 
 const API_KEY = 'test-key'
@@ -190,5 +191,19 @@ describe('fetchFinancialSummary', () => {
   it('throws on non-OK response', async () => {
     mockFetch('Forbidden', 403)
     await expect(fetchFinancialSummary(API_KEY, '72030')).rejects.toThrow('JQuants API error 403')
+  })
+})
+
+describe('fetchFinancialSummaryByDate', () => {
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it('requests all disclosures for one date without a code filter', async () => {
+    mockFetch({ data: [] })
+
+    await fetchFinancialSummaryByDate(API_KEY, '2026-09-14')
+
+    const url = new URL(vi.mocked(fetch).mock.calls[0][0] as string)
+    expect(url.searchParams.get('date')).toBe('2026-09-14')
+    expect(url.searchParams.has('code')).toBe(false)
   })
 })

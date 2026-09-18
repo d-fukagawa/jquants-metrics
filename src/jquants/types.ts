@@ -69,9 +69,14 @@ export interface EquityValuationsResponse {
 export interface FinancialSummary {
   DiscNo:      string  // 開示番号 (PK)
   DiscDate:    string  // 開示日 (YYYY-MM-DD)
+  DiscTime?:   string  // 開示時刻 (HH:mm:ss)
   Code:        string  // 5桁
   DocType:     string  // 開示種別
   CurPerType:  string  // 1Q / 2Q / 3Q / 4Q / FY
+  CurPerSt?:   string  // 対象会計期間の開始日
+  CurPerEn?:   string  // 対象会計期間の終了日
+  CurFYSt?:    string  // 当会計年度の開始日
+  CurFYEn?:    string  // 当会計年度の終了日
   Sales:       string
   OP:          string  // 営業利益
   NP:          string  // 当期純利益
@@ -81,6 +86,8 @@ export interface FinancialSummary {
   EqAR:        string  // 自己資本比率 (小数, 例: "0.384")
   TA:          string  // 総資産
   CFO:         string  // 営業CF
+  CFI?:        string  // 投資CF
+  CFF?:        string  // 財務CF
   CashEq:      string
   ShOutFY:     string  // 発行済株式数
   TrShFY:      string  // 自己株式数
@@ -91,6 +98,10 @@ export interface FinancialSummary {
   FOP:         string  // 予想営業利益
   FNP:         string  // 予想当期純利益
   FEPS:        string  // 予想EPS
+  RetroRst?:   string  // 遡及修正
+  ChgByASRev?: string  // 会計基準改正に伴う変更
+  ChgNoASRev?: string  // 会計基準改正以外の変更
+  ChgAcEst?:   string  // 会計上の見積り変更
 }
 
 export interface FinsSummaryResponse {

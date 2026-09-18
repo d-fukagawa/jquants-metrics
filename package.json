@@ -14,7 +14,10 @@
     "sync:daily:prices": "tsx scripts/daily-prices-sync.ts",
     "sync:daily:valuations": "tsx scripts/daily-valuations-sync.ts",
     "sync:edinet:watch": "tsx scripts/edinet-watch-sync.ts",
+    "sync:phase-a:edinet": "tsx scripts/sync-phase-a-edinet.ts",
     "sync:backfill:financials": "tsx scripts/backfill-financials.ts",
+    "sync:backfill:phase-a-financials": "tsx scripts/backfill-phase-a-financials.ts",
+    "audit:phase-a-inputs": "tsx scripts/audit-phase-a-inputs.ts",
     "sync:backfill:prices": "tsx scripts/backfill-prices.ts",
     "sync:backfill:valuations": "tsx scripts/backfill-valuations.ts",
     "import:stock-themes": "tsx scripts/import-stock-themes.ts",
@@ -28,6 +31,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
     "drizzle-orm": "^0.40.1",
+    "fflate": "^0.8.3",
     "hono": "^4.12.0"
   },
   "devDependencies": {

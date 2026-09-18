@@ -1,8 +1,8 @@
 import { sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { stockMaster, dailyPrices, financialSummary, finsDetails, financialAdjustments } from '../db/schema'
-import type { DailyBar } from '../jquants/types'
-import { fetchEquitiesMaster, fetchDailyPrices, fetchDailyPricesAll, fetchFinancialSummary, fetchFinsDetails } from '../jquants/client'
+import type { DailyBar, FinancialSummary as JQuantsFinancialSummary } from '../jquants/types'
+import { fetchEquitiesMaster, fetchDailyPrices, fetchDailyPricesAll, fetchFinancialSummary, fetchFinancialSummaryByDate, fetchFinsDetails } from '../jquants/client'
 import { fetchCompanyBridgeFacts, searchCompanyByCode } from '../edinet/client'
 import { fetchOfficialTaxAndAdjustments } from '../edinet/officialClient'
 import { toNullableString } from '../utils/number'
@@ -14,6 +14,15 @@ export const DEFAULT_PRICE_SYNC_TO = '2025-11-29'
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
+function toNullableBoolean(value: string | boolean | null | undefined): boolean | null {
+  if (value == null || value === '') return null
+  if (typeof value === 'boolean') return value
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'true') return true
+  if (normalized === 'false') return false
+  return null
+}
+
 export type DetailsSource = 'jquants' | 'edinetdb' | 'edinet+official'
 
 export interface EdinetFallbackResult {
@@ -21,6 +30,8 @@ export interface EdinetFallbackResult {
   detailsSource: DetailsSource
   taxExpenseFilledCount: number
   adjustmentsFilledCount: number
+  officialErrorCount?: number
+  officialWarningCount?: number
 }
 
 // XBRL キー名の候補から最初にマッチする値を返す
@@ -309,21 +320,20 @@ export async function syncDailyPrices(
 }
 
 
-// 財務情報同期 — /v2/fins/summary
-export async function syncFinancialSummary(
-  db: Db,
-  apiKey: string,
-  code: string,
-): Promise<number> {
-  const summaries = await fetchFinancialSummary(apiKey, code)
+async function saveFinancialSummaries(db: Db, summaries: JQuantsFinancialSummary[]): Promise<number> {
   if (summaries.length === 0) return 0
 
   const rows = summaries.map(s => ({
     code:        s.Code,
     discNo:      s.DiscNo,
     discDate:    s.DiscDate  || null,
+    discTime:    toNullableString(s.DiscTime),
     docType:     s.DocType   || null,
     curPerType:  s.CurPerType || null,
+    curPerStart: toNullableString(s.CurPerSt),
+    curPerEnd:   toNullableString(s.CurPerEn),
+    curFyStart:  toNullableString(s.CurFYSt),
+    curFyEnd:    toNullableString(s.CurFYEn),
     sales:       toNullableString(s.Sales),
     op:          toNullableString(s.OP),
     np:          toNullableString(s.NP),
@@ -333,6 +343,8 @@ export async function syncFinancialSummary(
     eqAr:        toNullableString(s.EqAR),
     totalAssets: toNullableString(s.TA),
     cfo:         toNullableString(s.CFO),
+    cfi:         toNullableString(s.CFI),
+    cff:         toNullableString(s.CFF),
     cashEq:      toNullableString(s.CashEq),
     shOutFy:     toNullableString(s.ShOutFY),
     trShFy:      toNullableString(s.TrShFY),
@@ -342,6 +354,10 @@ export async function syncFinancialSummary(
     fNp:         toNullableString(s.FNP),
     fEps:        toNullableString(s.FEPS),
     fDivAnn:     toNullableString(s.FDivAnn),
+    retroRestatement: toNullableBoolean(s.RetroRst),
+    changedByAsRevision: toNullableBoolean(s.ChgByASRev),
+    changedOtherThanAsRevision: toNullableBoolean(s.ChgNoASRev),
+    changedAccountingEstimate: toNullableBoolean(s.ChgAcEst),
   }))
 
   await db.insert(financialSummary)
@@ -350,8 +366,13 @@ export async function syncFinancialSummary(
       target: [financialSummary.code, financialSummary.discNo],
       set: {
         discDate:    sql`excluded.disc_date`,
+        discTime:    sql`excluded.disc_time`,
         docType:     sql`excluded.doc_type`,
         curPerType:  sql`excluded.cur_per_type`,
+        curPerStart: sql`excluded.cur_per_start`,
+        curPerEnd:   sql`excluded.cur_per_end`,
+        curFyStart:  sql`excluded.cur_fy_start`,
+        curFyEnd:    sql`excluded.cur_fy_end`,
         sales:       sql`excluded.sales`,
         op:          sql`excluded.op`,
         np:          sql`excluded.np`,
@@ -361,6 +382,8 @@ export async function syncFinancialSummary(
         eqAr:        sql`excluded.eq_ar`,
         totalAssets: sql`excluded.total_assets`,
         cfo:         sql`excluded.cfo`,
+        cfi:         sql`excluded.cfi`,
+        cff:         sql`excluded.cff`,
         cashEq:      sql`excluded.cash_eq`,
         shOutFy:     sql`excluded.sh_out_fy`,
         trShFy:      sql`excluded.tr_sh_fy`,
@@ -370,6 +393,10 @@ export async function syncFinancialSummary(
         fNp:         sql`excluded.f_np`,
         fEps:        sql`excluded.f_eps`,
         fDivAnn:     sql`excluded.f_div_ann`,
+        retroRestatement: sql`excluded.retro_restatement`,
+        changedByAsRevision: sql`excluded.changed_by_as_revision`,
+        changedOtherThanAsRevision: sql`excluded.changed_other_than_as_revision`,
+        changedAccountingEstimate: sql`excluded.changed_accounting_estimate`,
       },
     })
 
@@ -425,6 +452,24 @@ export async function syncFinsDetails(
   return rows.length
 }
 
+// 財務情報同期 — /v2/fins/summary（1銘柄の履歴）
+export async function syncFinancialSummary(
+  db: Db,
+  apiKey: string,
+  code: string,
+): Promise<number> {
+  return saveFinancialSummaries(db, await fetchFinancialSummary(apiKey, code))
+}
+
+// 財務情報同期 — /v2/fins/summary（1開示日の全銘柄）
+export async function syncFinancialSummaryByDate(
+  db: Db,
+  apiKey: string,
+  date: string,
+): Promise<number> {
+  return saveFinancialSummaries(db, await fetchFinancialSummaryByDate(apiKey, date))
+}
+
 // 詳細財務情報補完（EDINETDB + 公式EDINET API）
 // - FY のみ対象
 // - disc_no は EDINET:<fiscal_year>
@@ -442,6 +487,8 @@ export async function syncFinsDetailsFromEdinet(
       detailsSource: 'edinetdb',
       taxExpenseFilledCount: 0,
       adjustmentsFilledCount: 0,
+      officialErrorCount: 0,
+      officialWarningCount: 0,
     }
   }
 
@@ -453,6 +500,8 @@ export async function syncFinsDetailsFromEdinet(
       detailsSource: 'edinetdb',
       taxExpenseFilledCount: 0,
       adjustmentsFilledCount: 0,
+      officialErrorCount: 0,
+      officialWarningCount: 0,
     }
   }
 
@@ -482,6 +531,8 @@ export async function syncFinsDetailsFromEdinet(
 
   let taxExpenseFilledCount = 0
   let adjustmentsFilledCount = 0
+  let officialErrorCount = 0
+  let officialWarningCount = 0
   let usedOfficial = false
 
   for (const fact of fyFacts) {
@@ -496,6 +547,7 @@ export async function syncFinsDetailsFromEdinet(
       try {
         const official = await fetchOfficialTaxAndAdjustments(edinetApiKey, fact.sourceDocId)
         usedOfficial = true
+        officialWarningCount += official.warnings?.length ?? 0
         if (taxExpense == null && official.taxExpense != null) {
           taxExpense = toNullableString(official.taxExpense)
         }
@@ -513,6 +565,7 @@ export async function syncFinsDetailsFromEdinet(
         }
       } catch {
         // 公式EDINETの取得失敗は継続（NULL許容）
+        officialErrorCount++
       }
     }
 
@@ -541,6 +594,8 @@ export async function syncFinsDetailsFromEdinet(
     detailsSource: usedOfficial ? 'edinet+official' : 'edinetdb',
     taxExpenseFilledCount,
     adjustmentsFilledCount,
+    officialErrorCount,
+    officialWarningCount,
   }
 }
 
