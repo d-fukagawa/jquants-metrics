@@ -25,6 +25,7 @@ import { MetricsCard } from '../components/MetricsCard'
 import { ValuationTrendChart } from '../components/ValuationTrendChart'
 import { parseCode4, toCode4, toCode5 } from '../utils/stockCode'
 import { getStockValuationAnalysis } from '../services/stockValuationService'
+import { selectCanonicalFinancialFields } from '../services/financialFields'
 
 export const stockRoute = new Hono<{ Bindings: Bindings }>()
 
@@ -70,6 +71,7 @@ stockRoute.get('/:code', async (c) => {
 
   const metrics    = calcMetrics(latestClose, financials)
   const fy         = financials.find(f => f.curPerType === 'FY') ?? financials[0] ?? null
+  const fyFields   = fy ? selectCanonicalFinancialFields(fy) : null
   const advMetrics = calcAdvancedMetrics(latestClose, fy, finsDetail)
   const adjMetrics = calcAdjustedEbitda(fy, finsDetail, adjustments)
   const recentPrices = prices.slice(0, 10)
@@ -390,25 +392,25 @@ stockRoute.get('/:code', async (c) => {
       )}
 
       {/* 財務サマリー */}
-      {fy && (
+      {fy && fyFields && (
         <>
           <div class="section-title">最新期 財務サマリー（{fy.curPerType} {fy.discDate}）</div>
           <div class="fin-grid">
             {/* PL */}
             <div class="card card-body">
               <div class="fin-block-title">損益計算書（PL）</div>
-              <div class="fin-row"><span class="fin-key">売上高</span><span class="fin-val">{fmtJpy(fy.sales)}</span></div>
-              <div class="fin-row"><span class="fin-key">営業利益 (OP)</span><span class={`fin-val ${parseFloat(fy.op ?? '0') >= 0 ? 'positive' : 'negative'}`}>{fmtJpy(fy.op)}</span></div>
-              <div class="fin-row"><span class="fin-key">当期純利益 (NP)</span><span class={`fin-val ${parseFloat(fy.np ?? '0') >= 0 ? 'positive' : 'negative'}`}>{fmtJpy(fy.np)}</span></div>
-              <div class="fin-row"><span class="fin-key">EPS</span><span class="fin-val">{fy.eps ? `¥${parseFloat(fy.eps).toFixed(2)}` : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">売上高</span><span class="fin-val">{fmtJpy(fyFields.sales)}</span></div>
+              <div class="fin-row"><span class="fin-key">営業利益 (OP)</span><span class={`fin-val ${parseFloat(fyFields.operatingProfit ?? '0') >= 0 ? 'positive' : 'negative'}`}>{fmtJpy(fyFields.operatingProfit)}</span></div>
+              <div class="fin-row"><span class="fin-key">当期純利益 (NP)</span><span class={`fin-val ${parseFloat(fyFields.netProfit ?? '0') >= 0 ? 'positive' : 'negative'}`}>{fmtJpy(fyFields.netProfit)}</span></div>
+              <div class="fin-row"><span class="fin-key">EPS</span><span class="fin-val">{fyFields.eps ? `¥${parseFloat(fyFields.eps).toFixed(2)}` : '—'}</span></div>
               <div class="fin-row"><span class="fin-key">BPS（自己資本/株）</span><span class="fin-val">{metrics.bps !== null ? `¥${metrics.bps.toLocaleString()}` : '—'}</span></div>
             </div>
             {/* BS */}
             <div class="card card-body">
               <div class="fin-block-title">貸借対照表（BS）</div>
-              <div class="fin-row"><span class="fin-key">総資産 (TA)</span><span class="fin-val">{fmtJpy(fy.totalAssets)}</span></div>
-              <div class="fin-row"><span class="fin-key">自己資本 (Eq)</span><span class="fin-val">{fmtJpy(fy.equity)}</span></div>
-              <div class="fin-row"><span class="fin-key">自己資本比率 (EqAR)</span><span class="fin-val">{fy.eqAr ? `${(parseFloat(fy.eqAr) * 100).toFixed(1)}%` : '—'}</span></div>
+              <div class="fin-row"><span class="fin-key">総資産 (TA)</span><span class="fin-val">{fmtJpy(fyFields.totalAssets)}</span></div>
+              <div class="fin-row"><span class="fin-key">自己資本 (ShEq)</span><span class="fin-val">{fmtJpy(fyFields.shareholdersEquity)}</span></div>
+              <div class="fin-row"><span class="fin-key">自己資本比率 (EqAR)</span><span class="fin-val">{fyFields.equityRatio ? `${(parseFloat(fyFields.equityRatio) * 100).toFixed(1)}%` : '—'}</span></div>
               <div class="fin-row"><span class="fin-key">現金・同等物</span><span class="fin-val">{fmtJpy(fy.cashEq)}</span></div>
               <div class="fin-row"><span class="fin-key">発行済株式数</span><span class="fin-val">{fy.shOutFy ? `${(parseFloat(fy.shOutFy) / 1e6).toFixed(0)}百万株` : '—'}</span></div>
             </div>
@@ -418,8 +420,8 @@ stockRoute.get('/:code', async (c) => {
               <div class="fin-row"><span class="fin-key">営業CF (CFO)</span><span class={`fin-val ${parseFloat(fy.cfo ?? '0') >= 0 ? 'positive' : 'negative'}`}>{fmtJpy(fy.cfo)}</span></div>
               <div class="fin-row"><span class="fin-key">配当金 (DivAnn)</span><span class="fin-val">{fy.divAnn ? `¥${parseFloat(fy.divAnn).toLocaleString()}` : '—'}</span></div>
               <div class="fin-row"><span class="fin-key">配当金予想</span><span class="fin-val">{fy.fDivAnn ? `¥${parseFloat(fy.fDivAnn).toLocaleString()}` : '—'}</span></div>
-              <div class="fin-row"><span class="fin-key">予想売上高</span><span class="fin-val">{fmtJpy(fy.fSales)}</span></div>
-              <div class="fin-row"><span class="fin-key">予想純利益</span><span class="fin-val">{fmtJpy(fy.fNp)}</span></div>
+              <div class="fin-row"><span class="fin-key">予想売上高</span><span class="fin-val">{fmtJpy(fyFields.forecastSales)}</span></div>
+              <div class="fin-row"><span class="fin-key">予想純利益</span><span class="fin-val">{fmtJpy(fyFields.forecastNetProfit)}</span></div>
             </div>
           </div>
         </>
@@ -444,18 +446,19 @@ stockRoute.get('/:code', async (c) => {
                 </tr>
               </thead>
               <tbody>
-                {financials.map(f => (
-                  <tr key={f.discNo} class={f.curPerType === 'FY' ? 'fy' : ''}>
+                {financials.map(f => {
+                  const fields = selectCanonicalFinancialFields(f)
+                  return <tr key={f.discNo} class={f.curPerType === 'FY' ? 'fy' : ''}>
                     <td style="font-family:ui-monospace,monospace;font-size:12px">{f.discDate ?? '—'}</td>
                     <td><span class="per-type">{f.curPerType ?? '—'}</span></td>
-                    <td class="r">{fmtJpy(f.sales)}</td>
-                    <td class="r">{fmtJpy(f.op)}</td>
-                    <td class="r">{fmtJpy(f.np)}</td>
-                    <td class="r">{f.eps ? `¥${parseFloat(f.eps).toFixed(1)}` : '—'}</td>
+                    <td class="r">{fmtJpy(fields.sales)}</td>
+                    <td class="r">{fmtJpy(fields.operatingProfit)}</td>
+                    <td class="r">{fmtJpy(fields.netProfit)}</td>
+                    <td class="r">{fields.eps ? `¥${parseFloat(fields.eps).toFixed(1)}` : '—'}</td>
                     <td class="r">{fmtJpy(f.cfo)}</td>
                     <td class="r">{f.divAnn ? `¥${parseFloat(f.divAnn)}` : '—'}</td>
                   </tr>
-                ))}
+                })}
               </tbody>
             </table>
           </div>

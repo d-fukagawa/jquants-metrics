@@ -105,20 +105,33 @@ export async function screenStocks(
     latest_fin AS (
       SELECT DISTINCT ON (code)
         code,
-        eps::float,
-        bps::float,
-        equity::float,
-        np::float,
-        eq_ar::float,
+        CASE WHEN doc_type LIKE '%NonConsolidated%'
+          THEN COALESCE(nc_eps, eps)::float ELSE eps::float END AS eps,
+        CASE WHEN doc_type LIKE '%NonConsolidated%'
+          THEN COALESCE(nc_bps, bps)::float ELSE bps::float END AS bps,
+        CASE WHEN doc_type LIKE '%NonConsolidated%'
+          THEN COALESCE(nc_shareholders_equity, shareholders_equity, nc_equity, equity)::float
+          ELSE COALESCE(shareholders_equity, equity)::float END AS equity,
+        CASE WHEN doc_type LIKE '%NonConsolidated%'
+          THEN COALESCE(nc_np, np)::float ELSE np::float END AS np,
+        CASE WHEN doc_type LIKE '%NonConsolidated%'
+          THEN COALESCE(nc_eq_ar, eq_ar)::float ELSE eq_ar::float END AS eq_ar,
         div_ann::float,
-        sales::float,
+        CASE WHEN doc_type LIKE '%NonConsolidated%'
+          THEN COALESCE(nc_sales, sales)::float ELSE sales::float END AS sales,
         sh_out_fy::float,
+        tr_sh_fy::float,
         cfo::float,
-        op::float,
+        CASE WHEN doc_type LIKE '%NonConsolidated%'
+          THEN COALESCE(nc_op, op)::float ELSE op::float END AS op,
         cash_eq::float
       FROM financial_summary
       WHERE cur_per_type = 'FY'
-      ORDER BY code, disc_date DESC
+      ORDER BY
+        code,
+        disc_date DESC,
+        (CASE WHEN doc_type LIKE '%NonConsolidated%' THEN 1 ELSE 0 END),
+        disc_no DESC
     ),
     latest_jquants_details AS (
       SELECT DISTINCT ON (code)
@@ -188,8 +201,8 @@ export async function screenStocks(
           ELSE NULL END AS per,
         CASE WHEN f.bps > 0
           THEN ROUND((p.close / f.bps)::numeric, 2)::float
-             WHEN f.equity > 0 AND f.sh_out_fy > 0
-          THEN ROUND((p.close / (f.equity / f.sh_out_fy))::numeric, 2)::float
+             WHEN f.equity > 0 AND (f.sh_out_fy - COALESCE(f.tr_sh_fy, 0)) > 0
+          THEN ROUND((p.close / (f.equity / (f.sh_out_fy - COALESCE(f.tr_sh_fy, 0))))::numeric, 2)::float
           ELSE NULL END AS pbr,
         CASE WHEN f.equity > 0
           THEN ROUND((f.np / f.equity * 100)::numeric, 1)::float

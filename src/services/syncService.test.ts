@@ -27,7 +27,7 @@ describe('syncStockMaster', () => {
     Code: '72030', CoName: 'トヨタ自動車', CoNameEn: 'TOYOTA MOTOR CORPORATION',
     Mkt: '0111', MktNm: 'プライム', S17: '6', S17Nm: '自動車・輸送機',
     S33: '3700', S33Nm: '輸送用機器', ScaleCat: 'TOPIX Core30',
-    Mrgn: '2', MrgnNm: '貸借', Date: '2026-02-21',
+    Mrgn: '2', MrgnNm: '貸借', ProdCat: '011', Date: '2026-02-21',
   }
 
   it('returns number of synced records', async () => {
@@ -48,6 +48,8 @@ describe('syncStockMaster', () => {
     expect(row.sector17).toBe('6')
     expect(row.sector17Nm).toBe('自動車・輸送機')
     expect(row.mrgn).toBe('2')
+    expect(row.prodCat).toBe('011')
+    expect(row.sourceDate).toBe('2026-02-21')
   })
 
   it('returns 0 and skips insert when empty', async () => {
@@ -133,11 +135,15 @@ describe('syncFinancialSummary', () => {
     CurFYSt: '2024-04-01', CurFYEn: '2025-03-31',
     Sales: '24630753000000', OP: '2005692000000', NP: '1773426000000',
     EPS: '136.07', BPS: '',   // IFRS中間 — 空文字
-    Eq: '38456954000000', EqAR: '0.384', TA: '100000000000000',
+    Eq: '38456954000000', ShEq: 38000000000000, EqAR: '0.384', TA: '100000000000000',
     CFO: '2944609000000', CFI: '-1200000000000', CFF: '-500000000000', CashEq: '8112922000000',
     ShOutFY: '15794987460', TrShFY: '2761598241', AvgSh: '13033161110',
     DivAnn: '30', FDivAnn: '35',
     FSales: '45000000000000', FOP: '4500000000000', FNP: '3500000000000', FEPS: '268.0',
+    NCSales: '100', NCOP: '10', NCNP: '8', NCEPS: '1', NCTA: '200', NCEq: '90',
+    NCShEq: '80', NCEqAR: '0.4', NCBPS: '40',
+    FNCSales: '110', FNCOP: '11', FNCNP: '9', FNCEPS: '1.1',
+    MatChgSub: true, SigChgInC: 'false',
     RetroRst: 'true', ChgByASRev: 'false', ChgNoASRev: '', ChgAcEst: 'false',
   }
 
@@ -165,6 +171,7 @@ describe('syncFinancialSummary', () => {
     expect(row.curPerType).toBe('2Q')
     expect(row.eps).toBe('136.07')
     expect(row.eqAr).toBe('0.384')
+    expect(row.shareholdersEquity).toBe('38000000000000')
     expect(row.cfo).toBe('2944609000000')
     expect(row.cfi).toBe('-1200000000000')
     expect(row.cff).toBe('-500000000000')
@@ -176,6 +183,10 @@ describe('syncFinancialSummary', () => {
     expect(row.retroRestatement).toBe(true)
     expect(row.changedByAsRevision).toBe(false)
     expect(row.changedOtherThanAsRevision).toBeNull()
+    expect(row.ncSales).toBe('100')
+    expect(row.ncShareholdersEquity).toBe('80')
+    expect(row.materialChangeSubsidiaries).toBe(true)
+    expect(row.significantScopeChange).toBe(false)
   })
 
   it('updates the added source fields on conflict', async () => {
@@ -189,6 +200,9 @@ describe('syncFinancialSummary', () => {
       curPerEnd: expect.anything(),
       cfi: expect.anything(),
       cff: expect.anything(),
+      shareholdersEquity: expect.anything(),
+      ncSales: expect.anything(),
+      significantScopeChange: expect.anything(),
       retroRestatement: expect.anything(),
     }))
   })
@@ -199,6 +213,34 @@ describe('syncFinancialSummary', () => {
     const count = await syncFinancialSummary(db, API_KEY, '72030')
     expect(count).toBe(0)
     expect(insert).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown boolean value instead of storing it as null', async () => {
+    vi.mocked(jquants.fetchFinancialSummary).mockResolvedValue([
+      { ...summary, SigChgInC: 'unknown' },
+    ])
+    const { db, insert } = makeMockDb()
+
+    await expect(syncFinancialSummary(db, API_KEY, '72030'))
+      .rejects.toThrow('Invalid J-Quants boolean for SigChgInC')
+    expect(insert).not.toHaveBeenCalled()
+  })
+
+  it('splits a large disclosure date into safe database batches', async () => {
+    vi.mocked(jquants.fetchFinancialSummary).mockResolvedValue(
+      Array.from({ length: 501 }, (_, index) => ({
+        ...summary,
+        DiscNo: `20240801${String(index).padStart(6, '0')}`,
+      })),
+    )
+    const { db, values } = makeMockDb()
+
+    const count = await syncFinancialSummary(db, API_KEY, '72030')
+
+    expect(count).toBe(501)
+    expect(values).toHaveBeenCalledTimes(2)
+    expect(values.mock.calls[0][0]).toHaveLength(500)
+    expect(values.mock.calls[1][0]).toHaveLength(1)
   })
 })
 
@@ -234,12 +276,13 @@ describe('syncFinsDetails', () => {
   beforeEach(() => vi.clearAllMocks())
 
   const detail = {
-    LocalCode: '72030',
-    DisclosureNumber: 'D202603120001',
-    DisclosedDate: '2026-03-12',
-    TypeOfDocument: 'FYFinancialStatements_Consolidated_IFRS',
-    TypeOfCurrentPeriod: 'FY',
-    Statement: {
+    Code: '72030',
+    DiscNo: 'D202603120001',
+    DiscDate: '2026-03-12',
+    DiscTime: '15:30:00',
+    DocType: 'FYFinancialStatements_Consolidated_IFRS',
+    FS: {
+      'Type of current period, DEI': 'FY',
       'Depreciation and amortization': '30000000000',
       'Short-term borrowings': '50000000000',
       'Long-term borrowings': '150000000000',
@@ -267,6 +310,8 @@ describe('syncFinsDetails', () => {
     expect(finsRows[0].dna).toBe('30000000000')
     expect(finsRows[0].debtCurrent).toBe('50000000000')
     expect(finsRows[0].debtNonCurr).toBe('150000000000')
+    expect(finsRows[0].discTime).toBe('15:30:00')
+    expect(finsRows[0].curPerType).toBe('FY')
 
     // 2回目: financial_adjustments
     const adjustmentRows = values.mock.calls[1][0]

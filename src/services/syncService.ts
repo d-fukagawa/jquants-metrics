@@ -14,13 +14,16 @@ export const DEFAULT_PRICE_SYNC_TO = '2025-11-29'
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
-function toNullableBoolean(value: string | boolean | null | undefined): boolean | null {
+function toNullableBoolean(
+  value: string | boolean | null | undefined,
+  fieldName: string,
+): boolean | null {
   if (value == null || value === '') return null
   if (typeof value === 'boolean') return value
   const normalized = value.trim().toLowerCase()
   if (normalized === 'true') return true
   if (normalized === 'false') return false
-  return null
+  throw new Error(`Invalid J-Quants boolean for ${fieldName}: ${value}`)
 }
 
 export type DetailsSource = 'jquants' | 'edinetdb' | 'edinet+official'
@@ -149,6 +152,7 @@ async function upsertFinsDetailsRows(
     code: string
     discNo: string
     discDate: string | null
+    discTime: string | null
     docType: string | null
     curPerType: string | null
     debtCurrent: string | null
@@ -165,6 +169,7 @@ async function upsertFinsDetailsRows(
       target: [finsDetails.code, finsDetails.discNo],
       set: {
         discDate:     sql`excluded.disc_date`,
+        discTime:     sql`excluded.disc_time`,
         docType:      sql`excluded.doc_type`,
         curPerType:   sql`excluded.cur_per_type`,
         debtCurrent:  sql`excluded.debt_current`,
@@ -275,6 +280,8 @@ export async function syncStockMaster(db: Db, apiKey: string): Promise<number> {
     mktNm:      m.MktNm,
     mrgn:       m.Mrgn,
     mrgnNm:     m.MrgnNm,
+    sourceDate: m.Date || null,
+    prodCat:    m.ProdCat || null,
     updatedAt:  new Date(),
   }))
 
@@ -295,6 +302,8 @@ export async function syncStockMaster(db: Db, apiKey: string): Promise<number> {
           mktNm:      sql`excluded.mkt_nm`,
           mrgn:       sql`excluded.mrgn`,
           mrgnNm:     sql`excluded.mrgn_nm`,
+          sourceDate: sql`excluded.source_date`,
+          prodCat:    sql`excluded.prod_cat`,
           updatedAt:  sql`excluded.updated_at`,
         },
       })
@@ -320,7 +329,7 @@ export async function syncDailyPrices(
 }
 
 
-async function saveFinancialSummaries(db: Db, summaries: JQuantsFinancialSummary[]): Promise<number> {
+export async function saveFinancialSummaries(db: Db, summaries: JQuantsFinancialSummary[]): Promise<number> {
   if (summaries.length === 0) return 0
 
   const rows = summaries.map(s => ({
@@ -340,6 +349,7 @@ async function saveFinancialSummaries(db: Db, summaries: JQuantsFinancialSummary
     eps:         toNullableString(s.EPS),
     bps:         toNullableString(s.BPS),   // 空文字は NULL
     equity:      toNullableString(s.Eq),
+    shareholdersEquity: toNullableString(s.ShEq),
     eqAr:        toNullableString(s.EqAR),
     totalAssets: toNullableString(s.TA),
     cfo:         toNullableString(s.CFO),
@@ -354,17 +364,33 @@ async function saveFinancialSummaries(db: Db, summaries: JQuantsFinancialSummary
     fNp:         toNullableString(s.FNP),
     fEps:        toNullableString(s.FEPS),
     fDivAnn:     toNullableString(s.FDivAnn),
-    retroRestatement: toNullableBoolean(s.RetroRst),
-    changedByAsRevision: toNullableBoolean(s.ChgByASRev),
-    changedOtherThanAsRevision: toNullableBoolean(s.ChgNoASRev),
-    changedAccountingEstimate: toNullableBoolean(s.ChgAcEst),
+    ncSales:     toNullableString(s.NCSales),
+    ncOp:        toNullableString(s.NCOP),
+    ncNp:        toNullableString(s.NCNP),
+    ncEps:       toNullableString(s.NCEPS),
+    ncTotalAssets: toNullableString(s.NCTA),
+    ncEquity:    toNullableString(s.NCEq),
+    ncShareholdersEquity: toNullableString(s.NCShEq),
+    ncEqAr:      toNullableString(s.NCEqAR),
+    ncBps:       toNullableString(s.NCBPS),
+    fNcSales:    toNullableString(s.FNCSales),
+    fNcOp:       toNullableString(s.FNCOP),
+    fNcNp:       toNullableString(s.FNCNP),
+    fNcEps:      toNullableString(s.FNCEPS),
+    materialChangeSubsidiaries: toNullableBoolean(s.MatChgSub, 'MatChgSub'),
+    significantScopeChange: toNullableBoolean(s.SigChgInC, 'SigChgInC'),
+    retroRestatement: toNullableBoolean(s.RetroRst, 'RetroRst'),
+    changedByAsRevision: toNullableBoolean(s.ChgByASRev, 'ChgByASRev'),
+    changedOtherThanAsRevision: toNullableBoolean(s.ChgNoASRev, 'ChgNoASRev'),
+    changedAccountingEstimate: toNullableBoolean(s.ChgAcEst, 'ChgAcEst'),
   }))
 
-  await db.insert(financialSummary)
-    .values(rows)
-    .onConflictDoUpdate({
-      target: [financialSummary.code, financialSummary.discNo],
-      set: {
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    await db.insert(financialSummary)
+      .values(rows.slice(i, i + BATCH_SIZE))
+      .onConflictDoUpdate({
+        target: [financialSummary.code, financialSummary.discNo],
+        set: {
         discDate:    sql`excluded.disc_date`,
         discTime:    sql`excluded.disc_time`,
         docType:     sql`excluded.doc_type`,
@@ -379,6 +405,7 @@ async function saveFinancialSummaries(db: Db, summaries: JQuantsFinancialSummary
         eps:         sql`excluded.eps`,
         bps:         sql`excluded.bps`,
         equity:      sql`excluded.equity`,
+        shareholdersEquity: sql`excluded.shareholders_equity`,
         eqAr:        sql`excluded.eq_ar`,
         totalAssets: sql`excluded.total_assets`,
         cfo:         sql`excluded.cfo`,
@@ -393,12 +420,28 @@ async function saveFinancialSummaries(db: Db, summaries: JQuantsFinancialSummary
         fNp:         sql`excluded.f_np`,
         fEps:        sql`excluded.f_eps`,
         fDivAnn:     sql`excluded.f_div_ann`,
+        ncSales:     sql`excluded.nc_sales`,
+        ncOp:        sql`excluded.nc_op`,
+        ncNp:        sql`excluded.nc_np`,
+        ncEps:       sql`excluded.nc_eps`,
+        ncTotalAssets: sql`excluded.nc_total_assets`,
+        ncEquity:    sql`excluded.nc_equity`,
+        ncShareholdersEquity: sql`excluded.nc_shareholders_equity`,
+        ncEqAr:      sql`excluded.nc_eq_ar`,
+        ncBps:       sql`excluded.nc_bps`,
+        fNcSales:    sql`excluded.f_nc_sales`,
+        fNcOp:       sql`excluded.f_nc_op`,
+        fNcNp:       sql`excluded.f_nc_np`,
+        fNcEps:      sql`excluded.f_nc_eps`,
+        materialChangeSubsidiaries: sql`excluded.material_change_subsidiaries`,
+        significantScopeChange: sql`excluded.significant_scope_change`,
         retroRestatement: sql`excluded.retro_restatement`,
         changedByAsRevision: sql`excluded.changed_by_as_revision`,
         changedOtherThanAsRevision: sql`excluded.changed_other_than_as_revision`,
         changedAccountingEstimate: sql`excluded.changed_accounting_estimate`,
-      },
-    })
+        },
+      })
+  }
 
   return rows.length
 }
@@ -424,18 +467,19 @@ export async function syncFinsDetails(
   }> = []
 
   const rows = details.map(d => {
-    const stmt = d.Statement ?? {}
-    const discNo = d.DisclosureNumber
-    const code5 = d.LocalCode ?? d.Code ?? code
-    const discDate = d.DisclosedDate || null
+    const stmt = d.FS ?? {}
+    const discNo = d.DiscNo
+    const code5 = d.Code || code
+    const discDate = d.DiscDate || null
     adjustmentRows.push(...pickAdjustmentItems(stmt, code5, discNo, discDate))
 
     return {
       code:         code5,
       discNo:       discNo,
       discDate:     discDate,
-      docType:      d.TypeOfDocument   || null,
-      curPerType:   d.TypeOfCurrentPeriod || null,
+      discTime:     toNullableString(d.DiscTime),
+      docType:      d.DocType || null,
+      curPerType:   toNullableString(firstMatch(stmt, ['Type of current period, DEI'])),
       debtCurrent:  toNullableString(firstMatch(stmt, KEYS.debtCurrent)),
       debtNonCurr:  toNullableString(firstMatch(stmt, KEYS.debtNonCurr)),
       dna:          toNullableString(firstMatch(stmt, KEYS.dna)),
@@ -509,6 +553,7 @@ export async function syncFinsDetailsFromEdinet(
     code: string
     discNo: string
     discDate: string | null
+    discTime: string | null
     docType: string | null
     curPerType: string | null
     debtCurrent: string | null
@@ -575,6 +620,7 @@ export async function syncFinsDetailsFromEdinet(
       code: code5,
       discNo,
       discDate,
+      discTime: null,
       docType: 'EDINET_FINANCIALS',
       curPerType: 'FY',
       debtCurrent: toNullableString(fact.debtCurrent),

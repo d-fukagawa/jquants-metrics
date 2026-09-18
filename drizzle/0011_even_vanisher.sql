@@ -1,0 +1,19 @@
+ALTER TABLE "financial_summary" ADD COLUMN "shareholders_equity" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_sales" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_op" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_np" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_eps" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_total_assets" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_equity" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_shareholders_equity" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_eq_ar" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "nc_bps" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "f_nc_sales" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "f_nc_op" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "f_nc_np" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "f_nc_eps" numeric;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "material_change_subsidiaries" boolean;--> statement-breakpoint
+ALTER TABLE "financial_summary" ADD COLUMN "significant_scope_change" boolean;--> statement-breakpoint
+ALTER TABLE "fins_details" ADD COLUMN "disc_time" text;--> statement-breakpoint
+ALTER TABLE "stock_master" ADD COLUMN "source_date" date;--> statement-breakpoint
+ALTER TABLE "stock_master" ADD COLUMN "prod_cat" text;

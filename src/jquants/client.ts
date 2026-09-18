@@ -1,11 +1,8 @@
 import type {
   EquitiesMasterResponse,
   EquityMaster,
-  DailyBarsResponse,
   DailyBar,
-  FinsSummaryResponse,
   FinancialSummary,
-  FinsDetailsResponse,
   FinsDetail,
   EquityValuation,
 } from './types'
@@ -86,8 +83,7 @@ export async function fetchDailyPrices(
   from: string,
   to: string,
 ): Promise<DailyBar[]> {
-  const data = await get<DailyBarsResponse>(apiKey, '/equities/bars/daily', { code, from, to })
-  return data.data
+  return getPaginated<DailyBar>(apiKey, '/equities/bars/daily', { code, from, to })
 }
 
 // 日足株価を取得する（全銘柄 × 1日）— 1リクエストで全銘柄分を取得
@@ -96,8 +92,7 @@ export async function fetchDailyPricesAll(
   apiKey: string,
   date: string,
 ): Promise<DailyBar[]> {
-  const data = await get<DailyBarsResponse>(apiKey, '/equities/bars/daily', { date })
-  return data.data
+  return getPaginated<DailyBar>(apiKey, '/equities/bars/daily', { date })
 }
 
 // 日次バリュエーション指標を取得する（全銘柄 × 1日）
@@ -131,8 +126,7 @@ export async function fetchFinancialSummary(
 ): Promise<FinancialSummary[]> {
   const params: Record<string, string> = { code }
   if (date) params.date = date
-  const data = await get<FinsSummaryResponse>(apiKey, '/fins/summary', params)
-  return data.data
+  return getPaginated<FinancialSummary>(apiKey, '/fins/summary', params)
 }
 
 // 財務情報を開示日単位で全銘柄取得する
@@ -149,6 +143,5 @@ export async function fetchFinsDetails(
   apiKey: string,
   code: string,
 ): Promise<FinsDetail[]> {
-  const data = await get<FinsDetailsResponse>(apiKey, '/fins/details', { code })
-  return data.data
+  return getPaginated<FinsDetail>(apiKey, '/fins/details', { code })
 }

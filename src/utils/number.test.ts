@@ -22,6 +22,10 @@ describe('number utils', () => {
 
   it('converts empty string to nullable string', () => {
     expect(toNullableString('')).toBeNull()
+    expect(toNullableString('  ')).toBeNull()
     expect(toNullableString('1')).toBe('1')
+    expect(toNullableString(0)).toBe('0')
+    expect(toNullableString(12.5)).toBe('12.5')
+    expect(toNullableString(Number.NaN)).toBeNull()
   })
 })

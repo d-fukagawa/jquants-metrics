@@ -8,14 +8,17 @@
 
 import { sql } from 'drizzle-orm'
 import { createDb } from '../src/db/client'
-import { syncFinancialSummaryByDate } from '../src/services/syncService'
+import { fetchFinancialSummaryByDate } from '../src/jquants/client'
+import { saveFinancialSummaries } from '../src/services/syncService'
 
 const databaseUrl = process.env.DATABASE_URL
+const secondaryDatabaseUrl = process.env.DATABASE_URL_SECONDARY
 const apiKey = process.env.JQUANTS_API_KEY
 if (!databaseUrl || !apiKey) {
   console.error('ERROR: DATABASE_URL and JQUANTS_API_KEY are required')
   process.exit(1)
 }
+const requiredApiKey = apiKey
 
 const requestedSleepMs = Math.max(0, Number(process.env.SLEEP_MS ?? '1000') || 1000)
 const rateLimitPerMin = Math.max(1, Number(process.env.RATE_LIMIT_PER_MIN ?? '60') || 60)
@@ -62,15 +65,23 @@ async function withRetry<T>(fn: () => Promise<T>, retries: number): Promise<T> {
 }
 
 const db = createDb(databaseUrl)
-const storedResult = await db.execute(sql`
-  SELECT DISTINCT disc_date
-  FROM financial_summary
-  WHERE disc_date IS NOT NULL
-  ORDER BY disc_date
-`)
-const storedDates = (storedResult.rows as Array<{ disc_date: string }>)
-  .map(row => row.disc_date)
-  .filter(Boolean)
+const databases = [db]
+if (secondaryDatabaseUrl && secondaryDatabaseUrl !== databaseUrl) {
+  databases.push(createDb(secondaryDatabaseUrl))
+}
+
+const storedDates: string[] = []
+for (const targetDb of databases) {
+  const storedResult = await targetDb.execute(sql`
+    SELECT DISTINCT disc_date
+    FROM financial_summary
+    WHERE disc_date IS NOT NULL
+    ORDER BY disc_date
+  `)
+  storedDates.push(...(storedResult.rows as Array<{ disc_date: string }>)
+    .map(row => row.disc_date)
+    .filter(Boolean))
+}
 const latestStoredDate = storedDates.at(-1) ?? toDate
 const eligibleDates = [...new Set([
   ...storedDates,
@@ -80,10 +91,18 @@ const eligibleDates = [...new Set([
   .sort()
 const allDates = eligibleDates.filter((_, index) => index % shards === shard)
 
+async function syncDateToTargets(date: string): Promise<number> {
+  const summaries = await fetchFinancialSummaryByDate(requiredApiKey, date)
+  for (const targetDb of databases) {
+    await saveFinancialSummaries(targetDb, summaries)
+  }
+  return summaries.length
+}
+
 let syncedRows = 0
 const failedDates: string[] = []
 console.log(
-  `[phase-a-backfill] start shard=${shard}/${shards} dates=${allDates.length}`
+  `[phase-a-backfill] start shard=${shard}/${shards} dates=${allDates.length} targets=${databases.length}`
   + ` from=${allDates[0] ?? '-'} to=${allDates.at(-1) ?? '-'} sleepMs=${sleepMs}`,
 )
 
@@ -91,7 +110,7 @@ for (let index = 0; index < allDates.length; index++) {
   const date = allDates[index]
   if (!date) continue
   try {
-    syncedRows += await withRetry(() => syncFinancialSummaryByDate(db, apiKey, date), retryPerDate)
+    syncedRows += await withRetry(() => syncDateToTargets(date), retryPerDate)
   } catch (error) {
     failedDates.push(date)
     const message = error instanceof Error ? error.message : String(error)

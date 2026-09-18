@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { financialAdjustments, financialSummary, finsDetails } from '../db/schema'
 import { parseNumber } from '../utils/number'
+import { selectCanonicalFinancialFields } from './financialFields'
 
 export type FinancialRow = Awaited<ReturnType<typeof getLatestFinancials>>[number]
 
@@ -39,13 +40,14 @@ export function calcMetrics(
              eps: null, bps: null, divAnn: null, curPerType: null, discDate: null }
   }
 
-  const eps    = parseNumber(fy.eps)
-  const equity = parseNumber(fy.equity)
-  const np     = parseNumber(fy.np)
+  const canonical = selectCanonicalFinancialFields(fy)
+  const eps    = parseNumber(canonical.eps)
+  const equity = parseNumber(canonical.shareholdersEquity)
+  const np     = parseNumber(canonical.netProfit)
   const divAnn = parseNumber(fy.divAnn)
 
   // BPS フォールバック: IFRS 中間では空 → Eq / (ShOutFY - TrShFY)
-  let bps = parseNumber(fy.bps)
+  let bps = parseNumber(canonical.bps)
   if (bps === null && equity !== null) {
     const shOut = parseNumber(fy.shOutFy)
     const trSh  = parseNumber(fy.trShFy)
@@ -205,8 +207,9 @@ export function calcAdvancedMetrics(
 
   const shOut  = parseNumber(fy.shOutFy)
   const cashEq = parseNumber(fy.cashEq)
-  const op     = parseNumber(fy.op)
-  const equity = parseNumber(fy.equity)
+  const canonical = selectCanonicalFinancialFields(fy)
+  const op     = parseNumber(canonical.operatingProfit)
+  const equity = parseNumber(canonical.shareholdersEquity)
 
   const debtCurrent  = detail ? parseNumber(detail.debtCurrent)  : null
   const debtNonCurr  = detail ? parseNumber(detail.debtNonCurr)  : null
@@ -245,7 +248,7 @@ export function calcAdvancedMetrics(
   // NOPAT = OP × (1 - 実効税率)
   const nopat = op !== null ? round0(op * (1 - taxRate)) : null
 
-  // 投下資本 = Eq + 有利子負債 - CashEq
+  // 投下資本 = 自己資本 + 有利子負債 - CashEq
   const investedCap = equity !== null && cashEq !== null
     ? round0(equity + totalDebt - cashEq)
     : null
@@ -263,7 +266,7 @@ export function calcAdjustedEbitda(
   detail: FinsDetailRow | null,
   adjustments: FinancialAdjustmentRow[],
 ): AdjustedEbitdaMetrics {
-  const op = fy ? parseNumber(fy.op) : null
+  const op = fy ? parseNumber(selectCanonicalFinancialFields(fy).operatingProfit) : null
   if (op === null) {
     return { ebitda: null, adjustedEbitda: null, addbackTotal: 0, deductionTotal: 0, reason: 'op_missing' }
   }

@@ -20,7 +20,7 @@ function normalizeRows(rows: Record<string, unknown>[]): Record<string, unknown>
   return rows.map(row => Object.fromEntries(
     Object.entries(row).map(([key, value]) => {
       if (typeof value === 'bigint') return [key, Number(value)]
-      if (!['code', 'mkt'].includes(key) && typeof value === 'string' && /^-?\d+$/.test(value)) {
+      if (!['code', 'mkt', 'prod_cat'].includes(key) && typeof value === 'string' && /^-?\d+$/.test(value)) {
         return [key, Number(value)]
       }
       return [key, value]
@@ -82,11 +82,99 @@ const invalidPeriods = await rows(sql`
 
 const flags = await rows(sql`
   SELECT
+    COUNT(*) FILTER (WHERE material_change_subsidiaries IS TRUE) AS material_change_subsidiaries,
+    COUNT(*) FILTER (WHERE significant_scope_change IS TRUE) AS significant_scope_change,
     COUNT(*) FILTER (WHERE retro_restatement IS TRUE) AS retro_restatement,
     COUNT(*) FILTER (WHERE changed_by_as_revision IS TRUE) AS changed_by_as_revision,
     COUNT(*) FILTER (WHERE changed_other_than_as_revision IS TRUE) AS changed_other_than_as_revision,
     COUNT(*) FILTER (WHERE changed_accounting_estimate IS TRUE) AS changed_accounting_estimate
   FROM financial_summary
+`)
+
+const productCategories = await rows(sql`
+  SELECT
+    COALESCE(prod_cat, '(null)') AS prod_cat,
+    COUNT(*) AS companies,
+    COUNT(*) FILTER (WHERE source_date IS NOT NULL) AS companies_with_source_date,
+    COUNT(*) FILTER (
+      WHERE mkt IN ('0111', '0112', '0113')
+        AND prod_cat = '011'
+        AND scale_cat NOT IN ('TOPIX Core30', 'TOPIX Large70')
+    ) AS phase_a_universe_companies
+  FROM stock_master
+  GROUP BY prod_cat
+  ORDER BY companies DESC, prod_cat
+`)
+
+const summaryColumnCoverage = await rows(sql`
+  WITH classified AS (
+    SELECT
+      *,
+      CASE
+        WHEN doc_type LIKE '%NonConsolidated%' THEN 'non_consolidated'
+        WHEN doc_type LIKE '%Consolidated%' THEN 'consolidated'
+        ELSE 'unknown'
+      END AS basis
+    FROM financial_summary
+  )
+  SELECT
+    basis,
+    COUNT(*) AS rows,
+    COUNT(*) FILTER (WHERE sales IS NOT NULL) AS rows_with_sales,
+    COUNT(*) FILTER (WHERE nc_sales IS NOT NULL) AS rows_with_nc_sales,
+    COUNT(*) FILTER (WHERE op IS NOT NULL) AS rows_with_op,
+    COUNT(*) FILTER (WHERE nc_op IS NOT NULL) AS rows_with_nc_op,
+    COUNT(*) FILTER (WHERE shareholders_equity IS NOT NULL) AS rows_with_shareholders_equity,
+    COUNT(*) FILTER (WHERE nc_shareholders_equity IS NOT NULL) AS rows_with_nc_shareholders_equity,
+    COUNT(*) FILTER (
+      WHERE CASE WHEN basis = 'non_consolidated' THEN COALESCE(nc_sales, sales) IS NOT NULL ELSE sales IS NOT NULL END
+    ) AS rows_with_canonical_sales,
+    COUNT(*) FILTER (
+      WHERE CASE WHEN basis = 'non_consolidated' THEN COALESCE(nc_op, op) IS NOT NULL ELSE op IS NOT NULL END
+    ) AS rows_with_canonical_op,
+    COUNT(*) FILTER (
+      WHERE CASE
+        WHEN basis = 'non_consolidated'
+          THEN COALESCE(nc_shareholders_equity, shareholders_equity, nc_equity, equity) IS NOT NULL
+        ELSE COALESCE(shareholders_equity, equity) IS NOT NULL
+      END
+    ) AS rows_with_canonical_shareholders_equity,
+    COUNT(*) FILTER (
+      WHERE CASE WHEN basis = 'non_consolidated' THEN COALESCE(nc_eq_ar, eq_ar) IS NOT NULL ELSE eq_ar IS NOT NULL END
+    ) AS rows_with_canonical_equity_ratio
+  FROM classified
+  GROUP BY basis
+  ORDER BY basis
+`)
+
+const equitySemantics = await rows(sql`
+  SELECT
+    COUNT(*) FILTER (WHERE equity IS NOT NULL) AS rows_with_equity,
+    COUNT(*) FILTER (WHERE shareholders_equity IS NOT NULL) AS rows_with_shareholders_equity,
+    COUNT(*) FILTER (WHERE equity IS NOT NULL AND shareholders_equity IS NOT NULL) AS rows_with_both,
+    COUNT(*) FILTER (
+      WHERE equity IS NOT NULL AND shareholders_equity IS NOT NULL
+        AND equity <> shareholders_equity
+    ) AS differing_rows,
+    MIN(ABS(equity - shareholders_equity)) FILTER (
+      WHERE equity IS NOT NULL AND shareholders_equity IS NOT NULL
+        AND equity <> shareholders_equity
+    ) AS minimum_absolute_difference,
+    MAX(ABS(equity - shareholders_equity)) FILTER (
+      WHERE equity IS NOT NULL AND shareholders_equity IS NOT NULL
+        AND equity <> shareholders_equity
+    ) AS maximum_absolute_difference
+  FROM financial_summary
+`)
+
+const detailsCoverage = await rows(sql`
+  SELECT
+    COUNT(*) AS rows,
+    COUNT(*) FILTER (WHERE disc_time IS NOT NULL) AS rows_with_disc_time,
+    COUNT(*) FILTER (WHERE cur_per_type IS NOT NULL) AS rows_with_period_type,
+    COUNT(*) FILTER (WHERE disc_no NOT LIKE 'EDINET:%') AS jquants_rows,
+    COUNT(*) FILTER (WHERE disc_no LIKE 'EDINET:%') AS edinet_rows
+  FROM fins_details
 `)
 
 const pilotCompanies = await rows(sql`
@@ -252,6 +340,10 @@ console.log(JSON.stringify({
   overview: overview[0] ?? {},
   invalidPeriods: invalidPeriods[0] ?? {},
   flags: flags[0] ?? {},
+  productCategories,
+  summaryColumnCoverage,
+  equitySemantics: equitySemantics[0] ?? {},
+  detailsCoverage: detailsCoverage[0] ?? {},
   pilotCompanies,
   byMarket,
   byDocumentType,

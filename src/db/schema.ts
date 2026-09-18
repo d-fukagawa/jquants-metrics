@@ -14,6 +14,8 @@ export const stockMaster = pgTable('stock_master', {
   mktNm:      text('mkt_nm').notNull(),
   mrgn:       text('mrgn').notNull(),
   mrgnNm:     text('mrgn_nm').notNull(),
+  sourceDate: date('source_date'),
+  prodCat:    text('prod_cat'),
   updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull(),
 })
 
@@ -73,7 +75,8 @@ export const financialSummary = pgTable('financial_summary', {
   np:          numeric('np'),                   // 当期純利益
   eps:         numeric('eps'),
   bps:         numeric('bps'),                  // NULL許容 (IFRS中間では空)
-  equity:      numeric('equity'),               // Eq — 自己資本
+  equity:      numeric('equity'),               // Eq — 純資産
+  shareholdersEquity: numeric('shareholders_equity'), // ShEq — 自己資本
   eqAr:        numeric('eq_ar'),                // 自己資本比率 (小数)
   totalAssets: numeric('total_assets'),
   cfo:         numeric('cfo'),                  // 営業CF
@@ -88,6 +91,21 @@ export const financialSummary = pgTable('financial_summary', {
   fNp:         numeric('f_np'),                 // 予想当期純利益
   fEps:        numeric('f_eps'),                // 予想EPS
   fDivAnn:     numeric('f_div_ann'),            // 年間配当予想
+  ncSales:     numeric('nc_sales'),
+  ncOp:        numeric('nc_op'),
+  ncNp:        numeric('nc_np'),
+  ncEps:       numeric('nc_eps'),
+  ncTotalAssets: numeric('nc_total_assets'),
+  ncEquity:    numeric('nc_equity'),
+  ncShareholdersEquity: numeric('nc_shareholders_equity'),
+  ncEqAr:      numeric('nc_eq_ar'),
+  ncBps:       numeric('nc_bps'),
+  fNcSales:    numeric('f_nc_sales'),
+  fNcOp:       numeric('f_nc_op'),
+  fNcNp:       numeric('f_nc_np'),
+  fNcEps:      numeric('f_nc_eps'),
+  materialChangeSubsidiaries: boolean('material_change_subsidiaries'),
+  significantScopeChange: boolean('significant_scope_change'),
   retroRestatement: boolean('retro_restatement'),
   changedByAsRevision: boolean('changed_by_as_revision'),
   changedOtherThanAsRevision: boolean('changed_other_than_as_revision'),
@@ -101,6 +119,7 @@ export const finsDetails = pgTable('fins_details', {
   code:         varchar('code', { length: 5 }).notNull(),
   discNo:       text('disc_no').notNull(),       // DisclosureNumber
   discDate:     date('disc_date'),
+  discTime:     text('disc_time'),
   docType:      text('doc_type'),
   curPerType:   text('cur_per_type'),
   debtCurrent:  numeric('debt_current'),         // 有利子負債_流動

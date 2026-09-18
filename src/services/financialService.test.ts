@@ -10,10 +10,17 @@ const BASE_FY = {
   curPerStart: null, curPerEnd: null, curFyStart: null, curFyEnd: null,
   sales: '45000000000000', op: '5000000000000', np: '4000000000000',
   eps: '375.4', bps: '3108',
-  equity: '26100000000000', eqAr: '0.275', totalAssets: '94800000000000',
+  equity: '26100000000000', shareholdersEquity: '26100000000000',
+  eqAr: '0.275', totalAssets: '94800000000000',
   cfo: '4210000000000', cfi: null, cff: null, cashEq: '8430000000000',
   shOutFy: '13148000000', trShFy: '1000000000',
   divAnn: '107', fSales: null, fOp: null, fNp: null, fEps: null, fDivAnn: null,
+  ncSales: null, ncOp: null, ncNp: null, ncEps: null,
+  ncTotalAssets: null, ncEquity: null, ncShareholdersEquity: null,
+  ncEqAr: null, ncBps: null,
+  fNcSales: null, fNcOp: null, fNcNp: null, fNcEps: null,
+  materialChangeSubsidiaries: null,
+  significantScopeChange: null,
   retroRestatement: null,
   changedByAsRevision: null,
   changedOtherThanAsRevision: null,
@@ -24,6 +31,7 @@ const BASE_DETAIL = {
   code: '72030',
   discNo: 'D-001',
   discDate: '2025-03-01',
+  discTime: null,
   docType: 'FY',
   curPerType: 'FY',
   debtCurrent: '50000000000',
@@ -124,9 +132,18 @@ describe('calcMetrics', () => {
     expect(m.pbr).toBeNull()
   })
 
-  it('returns null ROE when equity is null', () => {
-    const m = calcMetrics(3450, [{ ...BASE_FY, equity: null }])
+  it('returns null ROE when both ShEq and Eq are null', () => {
+    const m = calcMetrics(3450, [{ ...BASE_FY, shareholdersEquity: null, equity: null }])
     expect(m.roe).toBeNull()
+  })
+
+  it('uses shareholder equity instead of net assets for ROE', () => {
+    const m = calcMetrics(3450, [{
+      ...BASE_FY,
+      shareholdersEquity: '20000000000000',
+      equity: '40000000000000',
+    }])
+    expect(m.roe).toBe(20)
   })
 
   it('exposes eps and divAnn values', () => {

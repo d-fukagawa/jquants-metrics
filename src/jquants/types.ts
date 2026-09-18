@@ -1,5 +1,8 @@
 // JQuants API v2 レスポンス型定義
 
+export type JQuantsNumeric = string | number | null
+export type JQuantsBoolean = string | boolean | null
+
 // GET /v2/equities/master
 export interface EquityMaster {
   Code:      string  // 5桁 (例: "72030")
@@ -14,6 +17,7 @@ export interface EquityMaster {
   ScaleCat:  string
   Mrgn:      string
   MrgnNm:    string
+  ProdCat:   string
   Date:      string  // 基準日 (YYYY-MM-DD)
 }
 
@@ -43,6 +47,7 @@ export interface DailyBar {
 
 export interface DailyBarsResponse {
   data: DailyBar[]
+  pagination_key?: string
 }
 
 // GET /v2/equities/valuation
@@ -77,48 +82,67 @@ export interface FinancialSummary {
   CurPerEn?:   string  // 対象会計期間の終了日
   CurFYSt?:    string  // 当会計年度の開始日
   CurFYEn?:    string  // 当会計年度の終了日
-  Sales:       string
-  OP:          string  // 営業利益
-  NP:          string  // 当期純利益
-  EPS:         string
-  BPS:         string  // 空の場合あり (IFRS中間)
-  Eq:          string  // 自己資本
-  EqAR:        string  // 自己資本比率 (小数, 例: "0.384")
-  TA:          string  // 総資産
-  CFO:         string  // 営業CF
-  CFI?:        string  // 投資CF
-  CFF?:        string  // 財務CF
-  CashEq:      string
-  ShOutFY:     string  // 発行済株式数
-  TrShFY:      string  // 自己株式数
-  AvgSh:       string  // 期中平均株式数
-  DivAnn:      string  // 年間配当金 (確定)
-  FDivAnn:     string  // 年間配当金 (予想)
-  FSales:      string  // 予想売上高
-  FOP:         string  // 予想営業利益
-  FNP:         string  // 予想当期純利益
-  FEPS:        string  // 予想EPS
-  RetroRst?:   string  // 遡及修正
-  ChgByASRev?: string  // 会計基準改正に伴う変更
-  ChgNoASRev?: string  // 会計基準改正以外の変更
-  ChgAcEst?:   string  // 会計上の見積り変更
+  Sales:       JQuantsNumeric
+  OP:          JQuantsNumeric  // 営業利益
+  NP:          JQuantsNumeric  // 当期純利益
+  EPS:         JQuantsNumeric
+  BPS:         JQuantsNumeric  // 空の場合あり (IFRS中間)
+  Eq:          JQuantsNumeric  // 純資産
+  ShEq?:       JQuantsNumeric  // 自己資本
+  EqAR:        JQuantsNumeric  // 自己資本比率 (小数, 例: "0.384")
+  TA:          JQuantsNumeric  // 総資産
+  CFO:         JQuantsNumeric  // 営業CF
+  CFI?:        JQuantsNumeric  // 投資CF
+  CFF?:        JQuantsNumeric  // 財務CF
+  CashEq:      JQuantsNumeric
+  ShOutFY:     JQuantsNumeric  // 発行済株式数
+  TrShFY:      JQuantsNumeric  // 自己株式数
+  AvgSh:       JQuantsNumeric  // 期中平均株式数
+  DivAnn:      JQuantsNumeric  // 年間配当金 (確定)
+  FDivAnn:     JQuantsNumeric  // 年間配当金 (予想)
+  FSales:      JQuantsNumeric  // 予想売上高
+  FOP:         JQuantsNumeric  // 予想営業利益
+  FNP:         JQuantsNumeric  // 予想当期純利益
+  FEPS:        JQuantsNumeric  // 予想EPS
+  NCSales?:    JQuantsNumeric
+  NCOP?:       JQuantsNumeric
+  NCNP?:       JQuantsNumeric
+  NCEPS?:      JQuantsNumeric
+  NCTA?:       JQuantsNumeric
+  NCEq?:       JQuantsNumeric
+  NCEqAR?:     JQuantsNumeric
+  NCBPS?:      JQuantsNumeric
+  NCShEq?:     JQuantsNumeric
+  FNCSales?:   JQuantsNumeric
+  FNCOP?:      JQuantsNumeric
+  FNCNP?:      JQuantsNumeric
+  FNCEPS?:     JQuantsNumeric
+  MatChgSub?:  JQuantsBoolean  // 旧様式: 重要な子会社の異動
+  SigChgInC?:  JQuantsBoolean  // 連結範囲の重要な変更
+  RetroRst?:   JQuantsBoolean  // 遡及修正
+  ChgByASRev?: JQuantsBoolean  // 会計基準改正に伴う変更
+  ChgNoASRev?: JQuantsBoolean  // 会計基準改正以外の変更
+  ChgAcEst?:   JQuantsBoolean  // 会計上の見積り変更
 }
 
 export interface FinsSummaryResponse {
   data: FinancialSummary[]
+  pagination_key?: string
+  cursor?: string
 }
 
 // GET /v2/fins/details
 export interface FinsDetail {
-  LocalCode:           string   // 5桁 (例: "72030")
-  Code?:               string   // 念のためオプショナル（フィールド名が揺れる可能性）
-  DisclosureNumber:    string   // 開示番号 (PK)
-  DisclosedDate:       string   // 開示日 (YYYY-MM-DD)
-  TypeOfDocument:      string   // 開示種別
-  TypeOfCurrentPeriod: string   // 1Q / 2Q / 3Q / 4Q / FY
-  Statement:           Record<string, string>  // XBRL 要素名 → 数値文字列
+  DiscDate: string
+  DiscTime?: string
+  Code: string
+  DiscNo: string
+  DocType: string
+  FS: Record<string, string>  // 冗長ラベル（英語） → 財務諸表値
 }
 
 export interface FinsDetailsResponse {
   data: FinsDetail[]
+  pagination_key?: string
+  cursor?: string
 }
